@@ -7,6 +7,8 @@ use std::task::{Context, Poll};
 use ::mio::Ready;
 use std::os::unix::io::AsRawFd;
 
+use crate::ancillary::SocketAncillary;
+
 pub struct UnixSeqpacket {
 	io: PollEvented<crate::mio::EventedSocket>,
 }
@@ -88,9 +90,19 @@ impl UnixSeqpacket {
 
 	/// Send data on the socket to the connected peer without blocking.
 	pub fn poll_send_vectored(&mut self, cx: &mut Context, buffer: &[IoSlice]) -> Poll<std::io::Result<usize>> {
+		self.poll_send_vectored_with_ancillary(cx, buffer, &mut SocketAncillary::new(&mut []))
+	}
+
+	/// Send data on the socket to the connected peer without blocking.
+	pub fn poll_send_vectored_with_ancillary(
+		&mut self,
+		cx: &mut Context,
+		buffer: &[IoSlice],
+		ancillary: &mut SocketAncillary,
+	) -> Poll<std::io::Result<usize>> {
 		ready!(self.io.poll_write_ready(cx)?);
 
-		match send_msg(self.io.get_ref(), buffer) {
+		match send_msg(self.io.get_ref(), buffer, ancillary) {
 			Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
 				self.io.clear_write_ready(cx)?;
 				Poll::Pending
@@ -109,6 +121,15 @@ impl UnixSeqpacket {
 		poll_fn(|cx| self.poll_send_vectored(cx, buffer)).await
 	}
 
+	/// Send data on the socket to the connected peer.
+	pub async fn send_with_ancillary(
+		&mut self,
+		buffer: &[IoSlice<'_>],
+		ancillary: &mut SocketAncillary<'_>,
+	) -> std::io::Result<usize> {
+		poll_fn(|cx| self.poll_send_vectored_with_ancillary(cx, buffer, ancillary)).await
+	}
+
 	/// Receive data on the socket from the connected peer without blocking.
 	pub fn poll_recv(&mut self, cx: &mut Context, buffer: &mut [u8]) -> Poll<std::io::Result<usize>> {
 		ready!(self.io.poll_read_ready(cx, Ready::readable())?);
@@ -124,9 +145,19 @@ impl UnixSeqpacket {
 
 	/// Receive data on the socket from the connected peer without blocking.
 	pub fn poll_recv_vectored(&mut self, cx: &mut Context, buffer: &mut [IoSliceMut]) -> Poll<std::io::Result<usize>> {
+		self.poll_recv_vectored_with_ancillary(cx, buffer, &mut SocketAncillary::new(&mut []))
+	}
+
+	/// Receive data on the socket from the connected peer without blocking.
+	pub fn poll_recv_vectored_with_ancillary(
+		&mut self,
+		cx: &mut Context,
+		buffer: &mut [IoSliceMut],
+		ancillary: &mut SocketAncillary,
+	) -> Poll<std::io::Result<usize>> {
 		ready!(self.io.poll_read_ready(cx, Ready::readable())?);
 
-		match recv_msg(self.io.get_ref(), buffer) {
+		match recv_msg(self.io.get_ref(), buffer, ancillary) {
 			Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
 				self.io.clear_read_ready(cx, Ready::readable())?;
 				Poll::Pending
@@ -135,14 +166,23 @@ impl UnixSeqpacket {
 		}
 	}
 
-	/// Receove data on the socket from the connected peer.
+	/// Receive data on the socket from the connected peer.
 	pub async fn recv(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
 		poll_fn(|cx| self.poll_recv(cx, buffer)).await
 	}
 
-	/// Receove data on the socket from the connected peer.
+	/// Receive data on the socket from the connected peer.
 	pub async fn recv_vectored(&mut self, buffer: &mut [IoSliceMut<'_>]) -> std::io::Result<usize> {
 		poll_fn(|cx| self.poll_recv_vectored(cx, buffer)).await
+	}
+
+	/// Receive data on the socket from the connected peer.
+	pub async fn recv_vectored_with_ancillary(
+		&mut self,
+		buffer: &mut [IoSliceMut<'_>],
+		ancillary: &mut SocketAncillary<'_>,
+	) -> std::io::Result<usize> {
+		poll_fn(|cx| self.poll_recv_vectored_with_ancillary(cx, buffer, ancillary)).await
 	}
 
 	/// Shuts down the read, write, or both halves of this connection.
@@ -158,7 +198,27 @@ impl UnixSeqpacket {
 const SEND_MSG_DEFAULT_FLAGS: std::os::raw::c_int = libc::MSG_NOSIGNAL;
 const RECV_MSG_DEFAULT_FLAGS: std::os::raw::c_int = libc::MSG_NOSIGNAL | libc::MSG_CMSG_CLOEXEC;
 
-fn send_msg(socket: &socket2::Socket, buffer: &[IoSlice]) -> std::io::Result<usize> {
+#[cfg(any(target_os = "android", all(target_os = "linux", target_env = "gnu")))]
+type CmgLen = usize;
+
+#[cfg(any(
+	target_os = "dragonfly",
+	target_os = "emscripten",
+	target_os = "freebsd",
+	all(target_os = "linux", target_env = "musl",),
+	target_os = "netbsd",
+	target_os = "openbsd",
+))]
+type CmgLen = std::os::raw::c_int;
+
+fn send_msg(socket: &socket2::Socket, buffer: &[IoSlice], ancillary: &mut SocketAncillary) -> std::io::Result<usize> {
+	ancillary.truncated = false;
+
+	let control_data = match ancillary.len() {
+		0 => std::ptr::null_mut(),
+		_ => ancillary.buffer.as_mut_ptr() as *mut std::os::raw::c_void,
+	};
+
 	let fd = socket.as_raw_fd();
 	let header = libc::msghdr {
 		msg_name: std::ptr::null_mut(),
@@ -166,15 +226,21 @@ fn send_msg(socket: &socket2::Socket, buffer: &[IoSlice]) -> std::io::Result<usi
 		msg_iov: buffer.as_ptr() as *mut libc::iovec,
 		msg_iovlen: buffer.len(),
 		msg_flags: 0,
-		msg_control: std::ptr::null_mut(),
-		msg_controllen: 0,
+		msg_control: control_data,
+		msg_controllen: ancillary.len() as CmgLen,
 	};
+
 	unsafe {
 		check_returned_size(libc::sendmsg(fd, &header as *const _, SEND_MSG_DEFAULT_FLAGS))
 	}
 }
 
-fn recv_msg(socket: &socket2::Socket, buffer: &mut [IoSliceMut]) -> std::io::Result<usize> {
+fn recv_msg(socket: &socket2::Socket, buffer: &mut [IoSliceMut], ancillary: &mut SocketAncillary) -> std::io::Result<usize> {
+	let control_data = match ancillary.len() {
+		0 => std::ptr::null_mut(),
+		_ => ancillary.buffer.as_mut_ptr() as *mut std::os::raw::c_void,
+	};
+
 	let fd = socket.as_raw_fd();
 	let mut header = libc::msghdr {
 		msg_name: std::ptr::null_mut(),
@@ -182,12 +248,12 @@ fn recv_msg(socket: &socket2::Socket, buffer: &mut [IoSliceMut]) -> std::io::Res
 		msg_iov: buffer.as_ptr() as *mut libc::iovec,
 		msg_iovlen: buffer.len(),
 		msg_flags: 0,
-		msg_control: std::ptr::null_mut(),
-		msg_controllen: 0,
+		msg_control: control_data,
+		msg_controllen: ancillary.capacity() as CmgLen,
 	};
-	unsafe {
-		check_returned_size(libc::recvmsg(fd, &mut header as *mut _, RECV_MSG_DEFAULT_FLAGS))
-	}
+	let size = unsafe { check_returned_size(libc::recvmsg(fd, &mut header as *mut _, RECV_MSG_DEFAULT_FLAGS))? };
+	ancillary.truncated = header.msg_flags & libc::MSG_CTRUNC != 0;
+	Ok(size)
 }
 
 fn check_returned_size(ret: isize) -> std::io::Result<usize> {
