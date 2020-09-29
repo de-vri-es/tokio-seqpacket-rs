@@ -1,14 +1,23 @@
+use ::mio::Ready;
+use std::os::unix::io::AsRawFd;
+use std::os::unix::net::SocketAddr;
 use std::path::Path;
+use std::task::{Context, Poll};
 use tokio::future::poll_fn;
 use tokio::io::PollEvented;
-use std::os::unix::net::SocketAddr;
-use std::task::{Context, Poll};
-use ::mio::Ready;
 
 use crate::UnixSeqpacket;
 
 pub struct UnixSeqpacketListener {
 	io: PollEvented<crate::mio::EventedSocket>,
+}
+
+impl std::fmt::Debug for UnixSeqpacketListener {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		f.debug_struct("UnixSeqpacketListener")
+			.field("fd", &self.io.get_ref().as_raw_fd())
+			.finish()
+	}
 }
 
 impl UnixSeqpacketListener {

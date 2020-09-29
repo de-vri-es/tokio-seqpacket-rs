@@ -1,16 +1,24 @@
+use ::mio::Ready;
+use std::io::{IoSlice, IoSliceMut};
+use std::os::unix::io::AsRawFd;
 use std::path::Path;
+use std::task::{Context, Poll};
 use tokio::future::poll_fn;
 use tokio::io::PollEvented;
 use tokio::net::unix::UCred;
-use std::io::{IoSlice, IoSliceMut};
-use std::task::{Context, Poll};
-use ::mio::Ready;
-use std::os::unix::io::AsRawFd;
 
 use crate::ancillary::SocketAncillary;
 
 pub struct UnixSeqpacket {
 	io: PollEvented<crate::mio::EventedSocket>,
+}
+
+impl std::fmt::Debug for UnixSeqpacket {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		f.debug_struct("UnixSeqpacket")
+			.field("fd", &self.io.get_ref().as_raw_fd())
+			.finish()
+	}
 }
 
 macro_rules! ready {
