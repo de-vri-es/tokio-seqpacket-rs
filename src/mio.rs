@@ -20,10 +20,6 @@ impl EventedSocket {
 	pub fn inner_mut(&mut self) -> &mut socket2::Socket {
 		&mut self.inner
 	}
-
-	pub fn into_inner(self) -> socket2::Socket {
-		self.inner
-	}
 }
 
 impl std::ops::Deref for EventedSocket {

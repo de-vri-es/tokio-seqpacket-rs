@@ -1,6 +1,6 @@
 pub mod ancillary;
 mod listener;
-pub mod mio;
+mod mio;
 mod socket;
 mod split;
 mod ucred;
