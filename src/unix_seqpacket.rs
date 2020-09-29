@@ -34,10 +34,10 @@ impl UnixSeqpacket {
 		let address = socket2::SockAddr::unix(address)?;
 		let socket = socket2::Socket::new(socket2::Domain::unix(), crate::socket_type(), None)?;
 		match socket.connect(&address) {
-			Ok(()) => (),
 			Err(e) => if e.kind() != std::io::ErrorKind::WouldBlock {
 				return Err(e);
-			}
+			},
+			_ => (),
 		};
 
 		let socket = Self::new(socket)?;

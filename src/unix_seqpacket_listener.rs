@@ -22,10 +22,20 @@ impl UnixSeqpacketListener {
 	///
 	/// The create listener will be ready to accept new connections.
 	pub fn bind<P: AsRef<Path>>(address: P) -> std::io::Result<Self> {
+		Self::bind_with_backlog(address, 128)
+	}
+
+	/// Bind a new seqpacket listener to the given address.
+	///
+	/// The create listener will be ready to accept new connections.
+	///
+	/// The `backlog` parameter is used to determine the size of connection queue.
+	/// See `man 3 listen` for more information.
+	pub fn bind_with_backlog<P: AsRef<Path>>(address: P, backlog: std::os::raw::c_int) -> std::io::Result<Self> {
 		let address = socket2::SockAddr::unix(address)?;
 		let socket = socket2::Socket::new(socket2::Domain::unix(), crate::socket_type(), None)?;
 		socket.bind(&address)?;
-		socket.listen(128)?;
+		socket.listen(backlog)?;
 		Self::new(socket)
 	}
 
