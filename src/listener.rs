@@ -8,6 +8,7 @@ use tokio::io::PollEvented;
 
 use crate::UnixSeqpacket;
 
+/// Listener for Unix seqpacket sockets.
 pub struct UnixSeqpacketListener {
 	io: PollEvented<crate::mio::EventedSocket>,
 }

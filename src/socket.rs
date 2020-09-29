@@ -9,6 +9,7 @@ use tokio::net::unix::UCred;
 
 use crate::ancillary::SocketAncillary;
 
+/// Unix seqpacket socket.
 pub struct UnixSeqpacket {
 	io: PollEvented<crate::mio::EventedSocket>,
 }
@@ -62,6 +63,10 @@ impl UnixSeqpacket {
 		Ok((a, b))
 	}
 
+	/// Split the socket in a read half and a write half.
+	///
+	/// The two halves borrow `self`, so they can not be moved into different tasks.
+	/// An owned version of `Self::split()` is still planned.
 	pub fn split(&mut self) -> (crate::ReadHalf, crate::WriteHalf) {
 		unsafe {
 			let read_half = crate::ReadHalf::new(self);
@@ -92,17 +97,23 @@ impl UnixSeqpacket {
 		self.io.get_ref().take_error()
 	}
 
-	/// Send data on the socket to the connected peer without blocking.
+	/// Try to send data on the socket to the connected peer without blocking.
+	///
+	/// If the socket is not ready yet, the current task is scheduled to wake up when the socket becomes writeable.
 	pub fn poll_send(&mut self, cx: &mut Context, buffer: &[u8]) -> Poll<std::io::Result<usize>> {
 		poll_send(self, cx, buffer)
 	}
 
-	/// Send data on the socket to the connected peer without blocking.
+	/// Try to send data on the socket to the connected peer without blocking.
+	///
+	/// If the socket is not ready yet, the current task is scheduled to wake up when the socket becomes writeable.
 	pub fn poll_send_vectored(&mut self, cx: &mut Context, buffer: &[IoSlice]) -> Poll<std::io::Result<usize>> {
 		poll_send_vectored(self, cx, buffer)
 	}
 
-	/// Send data on the socket to the connected peer without blocking.
+	/// Try to send data with ancillary data on the socket to the connected peer without blocking.
+	///
+	/// If the socket is not ready yet, the current task is scheduled to wake up when the socket becomes writeable.
 	pub fn poll_send_vectored_with_ancillary(
 		&mut self,
 		cx: &mut Context,
@@ -122,7 +133,7 @@ impl UnixSeqpacket {
 		poll_fn(|cx| self.poll_send_vectored(cx, buffer)).await
 	}
 
-	/// Send data on the socket to the connected peer.
+	/// Send data with ancillary data on the socket to the connected peer.
 	pub async fn send_vectored_with_ancillary(
 		&mut self,
 		buffer: &[IoSlice<'_>],
@@ -131,17 +142,23 @@ impl UnixSeqpacket {
 		poll_fn(|cx| self.poll_send_vectored_with_ancillary(cx, buffer, ancillary)).await
 	}
 
-	/// Receive data on the socket from the connected peer without blocking.
+	/// Try to receive data on the socket from the connected peer without blocking.
+	///
+	/// If there is no data ready yet, the current task is scheduled to wake up when the socket becomes readable.
 	pub fn poll_recv(&mut self, cx: &mut Context, buffer: &mut [u8]) -> Poll<std::io::Result<usize>> {
 		poll_recv(self, cx, buffer)
 	}
 
-	/// Receive data on the socket from the connected peer without blocking.
+	/// Try to receive data on the socket from the connected peer without blocking.
+	///
+	/// If there is no data ready yet, the current task is scheduled to wake up when the socket becomes readable.
 	pub fn poll_recv_vectored(&mut self, cx: &mut Context, buffer: &mut [IoSliceMut]) -> Poll<std::io::Result<usize>> {
 		poll_recv_vectored(self, cx, buffer)
 	}
 
-	/// Receive data on the socket from the connected peer without blocking.
+	/// Try to receive data with ancillary data on the socket from the connected peer without blocking.
+	///
+	/// If there is no data ready yet, the current task is scheduled to wake up when the socket becomes readable.
 	pub fn poll_recv_vectored_with_ancillary(
 		&mut self,
 		cx: &mut Context,
@@ -161,7 +178,7 @@ impl UnixSeqpacket {
 		poll_fn(|cx| self.poll_recv_vectored(cx, buffer)).await
 	}
 
-	/// Receive data on the socket from the connected peer.
+	/// Receive data with ancillary data on the socket from the connected peer.
 	pub async fn recv_vectored_with_ancillary(
 		&mut self,
 		buffer: &mut [IoSliceMut<'_>],

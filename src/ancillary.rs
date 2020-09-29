@@ -1,3 +1,5 @@
+//! Support for creating / parsing ancillary data.
+
 // Copied from PR to the standard library.
 // PR: https://github.com/rust-lang/rust/pull/69864
 // File downloaded from: https://raw.githubusercontent.com/rust-lang/rust/20c88ddd5fe668b29e8fc2c3838710093e8eb94b/library/std/src/sys/unix/ext/net/ancillary.rs
@@ -194,12 +196,22 @@ impl<'a> Iterator for ScmCredentials<'a> {
 #[non_exhaustive]
 #[derive(Debug)]
 pub enum AncillaryError {
-	Unknown { cmsg_level: i32, cmsg_type: i32 },
+	/// The ancillary data type is not recognized.
+	Unknown {
+		/// The cmsg_level field of the ancillary data.
+		cmsg_level: i32,
+
+		/// The cmsg_type field of the ancillary data.
+		cmsg_type: i32,
+	},
 }
 
 /// This enum represent one control message of variable type.
 pub enum AncillaryData<'a> {
+	/// Ancillary data holding file descriptors.
 	ScmRights(ScmRights<'a>),
+
+	/// Ancillary data holding unix credentials.
 	#[cfg(any(doc, target_os = "android", target_os = "linux",))]
 	ScmCredentials(ScmCredentials<'a>),
 }
