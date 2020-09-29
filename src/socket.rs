@@ -131,7 +131,11 @@ impl UnixSeqpacket {
 	}
 
 	/// Send data on the socket to the connected peer.
-	pub async fn send_with_ancillary(&mut self, buffer: &[IoSlice<'_>], ancillary: &mut SocketAncillary<'_>) -> std::io::Result<usize> {
+	pub async fn send_vectored_with_ancillary(
+		&mut self,
+		buffer: &[IoSlice<'_>],
+		ancillary: &mut SocketAncillary<'_>,
+	) -> std::io::Result<usize> {
 		poll_fn(|cx| self.poll_send_vectored_with_ancillary(cx, buffer, ancillary)).await
 	}
 
