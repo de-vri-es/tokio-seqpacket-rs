@@ -1,7 +1,6 @@
 use tokio_seqpacket::UnixSeqpacket;
 use assert2::{assert, let_assert};
 
-
 /// Test a simple send and recv call.
 #[tokio::test]
 async fn send_recv() {
@@ -42,4 +41,34 @@ fn send_recv_out_of_order() {
 
 		assert!(let Ok(()) = task.await);
 	});
+}
+
+/// Test a simple send_vectored and recv_vectored call.
+#[tokio::test]
+async fn send_recv_vectored() {
+	use std::io::{IoSlice, IoSliceMut};
+
+	let_assert!(Ok((mut a, mut b)) = UnixSeqpacket::pair());
+	assert!(let Ok(12) = a.send_vectored(&[
+		IoSlice::new(b"Hello"),
+		IoSlice::new(b" "),
+		IoSlice::new(b"world"),
+		IoSlice::new(b"!"),
+	]).await);
+
+	let mut hello = [0u8; 5];
+	let mut space = [0u8; 1];
+	let mut world = [0u8; 5];
+	let mut punct = [0u8; 1];
+	assert!(let Ok(12) = b.recv_vectored(&mut [
+		IoSliceMut::new(&mut hello),
+		IoSliceMut::new(&mut space),
+		IoSliceMut::new(&mut world),
+		IoSliceMut::new(&mut punct),
+	]).await);
+
+	assert!(&hello == b"Hello");
+	assert!(&space == b" ");
+	assert!(&world == b"world");
+	assert!(&punct == b"!");
 }
