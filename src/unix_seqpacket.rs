@@ -15,9 +15,7 @@ pub struct UnixSeqpacket {
 
 impl std::fmt::Debug for UnixSeqpacket {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		f.debug_struct("UnixSeqpacket")
-			.field("fd", &self.io.get_ref().as_raw_fd())
-			.finish()
+		f.debug_struct("UnixSeqpacket").field("fd", &self.io.get_ref().as_raw_fd()).finish()
 	}
 }
 
@@ -26,7 +24,7 @@ macro_rules! ready {
 		match $e {
 			Poll::Pending => return Poll::Pending,
 			Poll::Ready(x) => x,
-		}
+			}
 	};
 }
 
@@ -42,8 +40,10 @@ impl UnixSeqpacket {
 		let address = socket2::SockAddr::unix(address)?;
 		let socket = socket2::Socket::new(socket2::Domain::unix(), crate::socket_type(), None)?;
 		match socket.connect(&address) {
-			Err(e) => if e.kind() != std::io::ErrorKind::WouldBlock {
-				return Err(e);
+			Err(e) => {
+				if e.kind() != std::io::ErrorKind::WouldBlock {
+					return Err(e);
+				}
 			},
 			_ => (),
 		};
@@ -91,7 +91,7 @@ impl UnixSeqpacket {
 			Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
 				self.io.clear_write_ready(cx)?;
 				Poll::Pending
-			}
+			},
 			x => Poll::Ready(x),
 		}
 	}
@@ -114,7 +114,7 @@ impl UnixSeqpacket {
 			Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
 				self.io.clear_write_ready(cx)?;
 				Poll::Pending
-			}
+			},
 			x => Poll::Ready(x),
 		}
 	}
@@ -130,11 +130,7 @@ impl UnixSeqpacket {
 	}
 
 	/// Send data on the socket to the connected peer.
-	pub async fn send_with_ancillary(
-		&mut self,
-		buffer: &[IoSlice<'_>],
-		ancillary: &mut SocketAncillary<'_>,
-	) -> std::io::Result<usize> {
+	pub async fn send_with_ancillary(&mut self, buffer: &[IoSlice<'_>], ancillary: &mut SocketAncillary<'_>) -> std::io::Result<usize> {
 		poll_fn(|cx| self.poll_send_vectored_with_ancillary(cx, buffer, ancillary)).await
 	}
 
@@ -238,9 +234,7 @@ fn send_msg(socket: &socket2::Socket, buffer: &[IoSlice], ancillary: &mut Socket
 		msg_controllen: ancillary.len() as CmgLen,
 	};
 
-	unsafe {
-		check_returned_size(libc::sendmsg(fd, &header as *const _, SEND_MSG_DEFAULT_FLAGS))
-	}
+	unsafe { check_returned_size(libc::sendmsg(fd, &header as *const _, SEND_MSG_DEFAULT_FLAGS)) }
 }
 
 fn recv_msg(socket: &socket2::Socket, buffer: &mut [IoSliceMut], ancillary: &mut SocketAncillary) -> std::io::Result<usize> {

@@ -68,12 +68,14 @@ impl UnixSeqpacketListener {
 
 		let (socket, addr) = match self.io.get_ref().accept() {
 			Ok(x) => x,
-			Err(e) => if e.kind() == std::io::ErrorKind::WouldBlock {
-				self.io.clear_read_ready(cx, Ready::readable())?;
-				return Poll::Pending;
-			} else {
-				return Poll::Ready(Err(e));
-			}
+			Err(e) => {
+				if e.kind() == std::io::ErrorKind::WouldBlock {
+					self.io.clear_read_ready(cx, Ready::readable())?;
+					return Poll::Pending;
+				} else {
+					return Poll::Ready(Err(e));
+				}
+			},
 		};
 
 		socket.set_nonblocking(true)?;

@@ -12,7 +12,6 @@ use std::os::unix::io::RawFd;
 #[cfg(any(target_os = "android", target_os = "linux",))]
 use libc::{gid_t, pid_t, uid_t};
 
-
 #[cfg(any(target_os = "android", all(target_os = "linux", target_env = "gnu")))]
 pub(crate) type CmsgLen = usize;
 
@@ -26,13 +25,7 @@ pub(crate) type CmsgLen = usize;
 ))]
 pub(crate) type CmsgLen = libc::socklen_t;
 
-fn add_to_ancillary_data<T>(
-	buffer: &mut [u8],
-	length: &mut usize,
-	source: &[T],
-	cmsg_level: libc::c_int,
-	cmsg_type: libc::c_int,
-) -> bool {
+fn add_to_ancillary_data<T>(buffer: &mut [u8], length: &mut usize, source: &[T], cmsg_level: libc::c_int, cmsg_type: libc::c_int) -> bool {
 	let source_len = if let Some(source_len) = source.len().checked_mul(size_of::<T>()) {
 		if let Ok(source_len) = u32::try_from(source_len) {
 			source_len
@@ -100,7 +93,10 @@ impl<'a, T> AncillaryDataIter<'a, T> {
 	///
 	/// `data` must contain a valid control message.
 	unsafe fn new(data: &'a [u8]) -> AncillaryDataIter<'a, T> {
-		AncillaryDataIter { data, phantom: PhantomData }
+		AncillaryDataIter {
+			data,
+			phantom: PhantomData,
+		}
 	}
 }
 
@@ -245,13 +241,15 @@ impl<'a> AncillaryData<'a> {
 					libc::SCM_RIGHTS => Ok(AncillaryData::as_rights(data)),
 					#[cfg(any(target_os = "android", target_os = "linux",))]
 					libc::SCM_CREDENTIALS => Ok(AncillaryData::as_credentials(data)),
-					cmsg_type => {
-						Err(AncillaryError::Unknown { cmsg_level: libc::SOL_SOCKET, cmsg_type })
-					}
+					cmsg_type => Err(AncillaryError::Unknown {
+						cmsg_level: libc::SOL_SOCKET,
+						cmsg_type,
+					}),
 				},
-				cmsg_level => {
-					Err(AncillaryError::Unknown { cmsg_level, cmsg_type: (*cmsg).cmsg_type })
-				}
+				cmsg_level => Err(AncillaryError::Unknown {
+					cmsg_level,
+					cmsg_type: (*cmsg).cmsg_type,
+				}),
 			}
 		}
 	}
@@ -305,7 +303,11 @@ impl<'a> SocketAncillary<'a> {
 	/// let mut ancillary = SocketAncillary::new(&mut ancillary_buffer[..]);
 	/// ```
 	pub fn new(buffer: &'a mut [u8]) -> Self {
-		SocketAncillary { buffer, length: 0, truncated: false }
+		SocketAncillary {
+			buffer,
+			length: 0,
+			truncated: false,
+		}
 	}
 
 	/// Returns the capacity of the buffer.
@@ -320,7 +322,10 @@ impl<'a> SocketAncillary<'a> {
 
 	/// Returns the iterator of the control messages.
 	pub fn messages(&self) -> Messages<'_> {
-		Messages { buffer: &self.buffer[..self.length], current: None }
+		Messages {
+			buffer: &self.buffer[..self.length],
+			current: None,
+		}
 	}
 
 	/// Is `true` if during a recv operation the ancillary was truncated.
@@ -336,13 +341,7 @@ impl<'a> SocketAncillary<'a> {
 	/// and type `SCM_RIGHTS`.
 	pub fn add_fds(&mut self, fds: &[RawFd]) -> bool {
 		self.truncated = false;
-		add_to_ancillary_data(
-			&mut self.buffer,
-			&mut self.length,
-			fds,
-			libc::SOL_SOCKET,
-			libc::SCM_RIGHTS,
-		)
+		add_to_ancillary_data(&mut self.buffer, &mut self.length, fds, libc::SOL_SOCKET, libc::SCM_RIGHTS)
 	}
 
 	/// Add credentials to the ancillary data.
@@ -355,13 +354,7 @@ impl<'a> SocketAncillary<'a> {
 	#[cfg(any(doc, target_os = "android", target_os = "linux",))]
 	pub fn add_creds(&mut self, creds: &[SocketCred]) -> bool {
 		self.truncated = false;
-		add_to_ancillary_data(
-			&mut self.buffer,
-			&mut self.length,
-			creds,
-			libc::SOL_SOCKET,
-			libc::SCM_CREDENTIALS,
-		)
+		add_to_ancillary_data(&mut self.buffer, &mut self.length, creds, libc::SOL_SOCKET, libc::SCM_CREDENTIALS)
 	}
 
 	/// Clears the ancillary data, removing all values.

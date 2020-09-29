@@ -1,7 +1,7 @@
 use ::mio::event::Evented;
 use ::mio::unix::EventedFd;
 use ::mio::{Poll, PollOpt, Ready, Token};
-use std::os::unix::io::{RawFd, AsRawFd};
+use std::os::unix::io::{AsRawFd, RawFd};
 
 /// Wrapper around [`socket2::Socket`] that implements [`mio::event::Evented`].
 pub struct EventedSocket {

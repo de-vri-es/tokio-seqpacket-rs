@@ -27,11 +27,7 @@ pub(crate) mod impl_linux {
 		unsafe {
 			let raw_fd = sock.as_raw_fd();
 
-			let mut ucred = libc::ucred {
-				pid: 0,
-				uid: 0,
-				gid: 0,
-			};
+			let mut ucred = libc::ucred { pid: 0, uid: 0, gid: 0 };
 
 			let ucred_size = std::mem::size_of::<libc::ucred>();
 

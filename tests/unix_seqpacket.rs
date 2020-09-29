@@ -1,5 +1,5 @@
-use tokio_seqpacket::UnixSeqpacket;
 use assert2::{assert, let_assert};
+use tokio_seqpacket::UnixSeqpacket;
 
 /// Test a simple send and recv call.
 #[tokio::test]

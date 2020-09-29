@@ -1,8 +1,8 @@
+pub mod ancillary;
+pub mod mio;
 mod ucred;
 mod unix_seqpacket;
 mod unix_seqpacket_listener;
-pub mod ancillary;
-pub mod mio;
 
 pub use unix_seqpacket::UnixSeqpacket;
 pub use unix_seqpacket_listener::UnixSeqpacketListener;

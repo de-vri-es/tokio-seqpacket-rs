@@ -1,6 +1,6 @@
-use tokio_seqpacket::{UnixSeqpacket, UnixSeqpacketListener};
 use assert2::{assert, let_assert};
 use tempfile::tempdir;
+use tokio_seqpacket::{UnixSeqpacket, UnixSeqpacketListener};
 
 /// Test that we can accept connections on the listener.
 #[test]
@@ -15,7 +15,6 @@ fn unix_seqpacket_listener() {
 		let server_task = tokio::task::spawn_local({
 			let_assert!(Ok(mut listener) = UnixSeqpacketListener::bind(&listener));
 			async move {
-
 				for _ in 0..2 {
 					let_assert!(Ok((mut peer, addr)) = listener.accept().await);
 					assert!(let None = addr.as_pathname());
