@@ -1,11 +1,11 @@
 pub mod ancillary;
+mod listener;
 pub mod mio;
+mod socket;
 mod ucred;
-mod unix_seqpacket;
-mod unix_seqpacket_listener;
 
-pub use unix_seqpacket::UnixSeqpacket;
-pub use unix_seqpacket_listener::UnixSeqpacketListener;
+pub use listener::UnixSeqpacketListener;
+pub use socket::UnixSeqpacket;
 
 /// Get the socket type for a close-on-exec non-blocking seqpacket socket.
 fn socket_type() -> socket2::Type {
