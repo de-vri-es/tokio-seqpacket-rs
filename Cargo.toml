@@ -22,3 +22,4 @@ libc = "0.2.77"
 [dev-dependencies]
 assert2 = "0.3.3"
 tokio = { version = "0.2.22", features = ["rt-core", "rt-util", "macros", "time"] }
+tempfile = "3.1.0"
