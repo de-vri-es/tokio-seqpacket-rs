@@ -62,6 +62,14 @@ impl UnixSeqpacket {
 		Ok((a, b))
 	}
 
+	pub fn split(&mut self) -> (crate::ReadHalf, crate::WriteHalf) {
+		unsafe {
+			let read_half = crate::ReadHalf::new(self);
+			let write_half = crate::WriteHalf::new(self);
+			(read_half, write_half)
+		}
+	}
+
 	/// Get the socket address of the local half of this connection.
 	pub fn local_addr(&self) -> std::io::Result<std::os::unix::net::SocketAddr> {
 		let addr = self.io.get_ref().local_addr()?;
@@ -86,20 +94,12 @@ impl UnixSeqpacket {
 
 	/// Send data on the socket to the connected peer without blocking.
 	pub fn poll_send(&mut self, cx: &mut Context, buffer: &[u8]) -> Poll<std::io::Result<usize>> {
-		ready!(self.io.poll_write_ready(cx)?);
-
-		match self.io.get_ref().send(buffer) {
-			Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-				self.io.clear_write_ready(cx)?;
-				Poll::Pending
-			},
-			x => Poll::Ready(x),
-		}
+		poll_send(self, cx, buffer)
 	}
 
 	/// Send data on the socket to the connected peer without blocking.
 	pub fn poll_send_vectored(&mut self, cx: &mut Context, buffer: &[IoSlice]) -> Poll<std::io::Result<usize>> {
-		self.poll_send_vectored_with_ancillary(cx, buffer, &mut SocketAncillary::new(&mut []))
+		poll_send_vectored(self, cx, buffer)
 	}
 
 	/// Send data on the socket to the connected peer without blocking.
@@ -109,15 +109,7 @@ impl UnixSeqpacket {
 		buffer: &[IoSlice],
 		ancillary: &mut SocketAncillary,
 	) -> Poll<std::io::Result<usize>> {
-		ready!(self.io.poll_write_ready(cx)?);
-
-		match send_msg(self.io.get_ref(), buffer, ancillary) {
-			Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-				self.io.clear_write_ready(cx)?;
-				Poll::Pending
-			},
-			x => Poll::Ready(x),
-		}
+		poll_send_vectored_with_ancillary(self, cx, buffer, ancillary)
 	}
 
 	/// Send data on the socket to the connected peer.
@@ -141,20 +133,12 @@ impl UnixSeqpacket {
 
 	/// Receive data on the socket from the connected peer without blocking.
 	pub fn poll_recv(&mut self, cx: &mut Context, buffer: &mut [u8]) -> Poll<std::io::Result<usize>> {
-		ready!(self.io.poll_read_ready(cx, Ready::readable())?);
-
-		match self.io.get_ref().recv(buffer) {
-			Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-				self.io.clear_read_ready(cx, Ready::readable())?;
-				Poll::Pending
-			},
-			x => Poll::Ready(x),
-		}
+		poll_recv(self, cx, buffer)
 	}
 
 	/// Receive data on the socket from the connected peer without blocking.
 	pub fn poll_recv_vectored(&mut self, cx: &mut Context, buffer: &mut [IoSliceMut]) -> Poll<std::io::Result<usize>> {
-		self.poll_recv_vectored_with_ancillary(cx, buffer, &mut SocketAncillary::new(&mut []))
+		poll_recv_vectored(self, cx, buffer)
 	}
 
 	/// Receive data on the socket from the connected peer without blocking.
@@ -164,15 +148,7 @@ impl UnixSeqpacket {
 		buffer: &mut [IoSliceMut],
 		ancillary: &mut SocketAncillary,
 	) -> Poll<std::io::Result<usize>> {
-		ready!(self.io.poll_read_ready(cx, Ready::readable())?);
-
-		match recv_msg(self.io.get_ref(), buffer, ancillary) {
-			Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-				self.io.clear_read_ready(cx, Ready::readable())?;
-				Poll::Pending
-			},
-			x => Poll::Ready(x),
-		}
+		poll_recv_vectored_with_ancillary(self, cx, buffer, ancillary)
 	}
 
 	/// Receive data on the socket from the connected peer.
@@ -268,5 +244,77 @@ fn check_returned_size(ret: isize) -> std::io::Result<usize> {
 		Err(std::io::Error::last_os_error())
 	} else {
 		Ok(ret as usize)
+	}
+}
+
+/// Send data on the socket to the connected peer without blocking.
+pub(crate) fn poll_send(socket: &UnixSeqpacket, cx: &mut Context, buffer: &[u8]) -> Poll<std::io::Result<usize>> {
+	ready!(socket.io.poll_write_ready(cx)?);
+
+	match socket.io.get_ref().send(buffer) {
+		Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+			socket.io.clear_write_ready(cx)?;
+			Poll::Pending
+		},
+		x => Poll::Ready(x),
+	}
+}
+
+/// Send data on the socket to the connected peer without blocking.
+pub(crate) fn poll_send_vectored(socket: &UnixSeqpacket, cx: &mut Context, buffer: &[IoSlice]) -> Poll<std::io::Result<usize>> {
+	poll_send_vectored_with_ancillary(socket, cx, buffer, &mut SocketAncillary::new(&mut []))
+}
+
+/// Send data on the socket to the connected peer without blocking.
+pub(crate) fn poll_send_vectored_with_ancillary(
+	socket: &UnixSeqpacket,
+	cx: &mut Context,
+	buffer: &[IoSlice],
+	ancillary: &mut SocketAncillary,
+) -> Poll<std::io::Result<usize>> {
+	ready!(socket.io.poll_write_ready(cx)?);
+
+	match send_msg(socket.io.get_ref(), buffer, ancillary) {
+		Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+			socket.io.clear_write_ready(cx)?;
+			Poll::Pending
+		},
+		x => Poll::Ready(x),
+	}
+}
+
+/// Receive data on the socket from the connected peer without blocking.
+pub(crate) fn poll_recv(socket: &UnixSeqpacket, cx: &mut Context, buffer: &mut [u8]) -> Poll<std::io::Result<usize>> {
+	ready!(socket.io.poll_read_ready(cx, Ready::readable())?);
+
+	match socket.io.get_ref().recv(buffer) {
+		Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+			socket.io.clear_read_ready(cx, Ready::readable())?;
+			Poll::Pending
+		},
+		x => Poll::Ready(x),
+	}
+}
+
+/// Receive data on the socket from the connected peer without blocking.
+pub(crate) fn poll_recv_vectored(socket: &UnixSeqpacket, cx: &mut Context, buffer: &mut [IoSliceMut]) -> Poll<std::io::Result<usize>> {
+	poll_recv_vectored_with_ancillary(socket, cx, buffer, &mut SocketAncillary::new(&mut []))
+}
+
+/// Receive data on the socket from the connected peer without blocking.
+pub(crate) fn poll_recv_vectored_with_ancillary(
+	socket: &UnixSeqpacket,
+	cx: &mut Context,
+	buffer: &mut [IoSliceMut],
+	ancillary: &mut SocketAncillary,
+) -> Poll<std::io::Result<usize>> {
+	ready!(socket.io.poll_read_ready(cx, Ready::readable())?);
+
+	match recv_msg(socket.io.get_ref(), buffer, ancillary) {
+		Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+			socket.io.clear_read_ready(cx, Ready::readable())?;
+			Poll::Pending
+		},
+		x => Poll::Ready(x),
 	}
 }

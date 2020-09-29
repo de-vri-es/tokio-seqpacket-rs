@@ -2,10 +2,12 @@ pub mod ancillary;
 mod listener;
 pub mod mio;
 mod socket;
+mod split;
 mod ucred;
 
 pub use listener::UnixSeqpacketListener;
 pub use socket::UnixSeqpacket;
+pub use split::{ReadHalf, WriteHalf};
 
 /// Get the socket type for a close-on-exec non-blocking seqpacket socket.
 fn socket_type() -> socket2::Type {
