@@ -6,7 +6,21 @@ on:
 jobs:
   build_and_test:
     name: Build and test
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        build: [stable, beta, nightly]
+        include:
+          - build: stable
+            os: ubuntu-latest
+            rust: stable
+          - build: beta
+            os: ubuntu-latest
+            rust: beta
+          - build: nightly
+            os: ubuntu-latest
+            rust: nightly
+
     steps:
       - name: Checkout code
         uses: actions/checkout@master
@@ -16,20 +30,23 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo
+          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-${{ matrix.rust }}-cargo
       - name: Build
         uses: actions-rs/cargo@v1
         with:
           command: build
+          toolchain: ${{ matrix.rust }}
           args: --all-features --color=always
       - name: Clippy
         uses: actions-rs/clippy-check@v1
         with:
+          toolchain: ${{ matrix.rust }}
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --release --all-features
       - name: Test
         uses: actions-rs/cargo@v1
         with:
           command: test
+          toolchain: ${{ matrix.rust }}
           args: --all-features --color=always
