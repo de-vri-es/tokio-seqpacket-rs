@@ -64,7 +64,7 @@ fn socket_type() -> socket2::Type {
 
 /// Convert a [`socket2::SockAddr`] to a [`std::os::unix::net::SocketAddr`].
 fn sockaddr_as_unix(addr: &socket2::SockAddr) -> Option<std::os::unix::net::SocketAddr> {
-	if addr.family() != libc::AF_UNIX as libc::sa_family_t {
+	if addr.family() != libc::AF_LOCAL as libc::sa_family_t {
 		return None;
 	}
 
