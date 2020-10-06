@@ -1,3 +1,6 @@
+v0.2.1:
+  * Fix receiving of ancillary data.
+
 v0.2.0:
   * Add supported for vectored I/O.
   * Add support for ancillary data.

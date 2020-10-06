@@ -201,7 +201,7 @@ const SEND_MSG_DEFAULT_FLAGS: std::os::raw::c_int = libc::MSG_NOSIGNAL;
 const RECV_MSG_DEFAULT_FLAGS: std::os::raw::c_int = libc::MSG_NOSIGNAL | libc::MSG_CMSG_CLOEXEC;
 
 #[cfg(any(target_os = "android", all(target_os = "linux", target_env = "gnu")))]
-type CmgLen = usize;
+type CmsgLen = usize;
 
 #[cfg(any(
 	target_os = "dragonfly",
@@ -211,7 +211,7 @@ type CmgLen = usize;
 	target_os = "netbsd",
 	target_os = "openbsd",
 ))]
-type CmgLen = std::os::raw::c_int;
+type CmsgLen = std::os::raw::c_int;
 
 fn send_msg(socket: &socket2::Socket, buffer: &[IoSlice], ancillary: &mut SocketAncillary) -> std::io::Result<usize> {
 	ancillary.truncated = false;
@@ -229,14 +229,14 @@ fn send_msg(socket: &socket2::Socket, buffer: &[IoSlice], ancillary: &mut Socket
 		msg_iovlen: buffer.len(),
 		msg_flags: 0,
 		msg_control: control_data,
-		msg_controllen: ancillary.len() as CmgLen,
+		msg_controllen: ancillary.len() as CmsgLen,
 	};
 
 	unsafe { check_returned_size(libc::sendmsg(fd, &header as *const _, SEND_MSG_DEFAULT_FLAGS)) }
 }
 
 fn recv_msg(socket: &socket2::Socket, buffer: &mut [IoSliceMut], ancillary: &mut SocketAncillary) -> std::io::Result<usize> {
-	let control_data = match ancillary.len() {
+	let control_data = match ancillary.capacity() {
 		0 => std::ptr::null_mut(),
 		_ => ancillary.buffer.as_mut_ptr() as *mut std::os::raw::c_void,
 	};
@@ -249,10 +249,11 @@ fn recv_msg(socket: &socket2::Socket, buffer: &mut [IoSliceMut], ancillary: &mut
 		msg_iovlen: buffer.len(),
 		msg_flags: 0,
 		msg_control: control_data,
-		msg_controllen: ancillary.capacity() as CmgLen,
+		msg_controllen: ancillary.capacity() as CmsgLen,
 	};
 	let size = unsafe { check_returned_size(libc::recvmsg(fd, &mut header as *mut _, RECV_MSG_DEFAULT_FLAGS))? };
 	ancillary.truncated = header.msg_flags & libc::MSG_CTRUNC != 0;
+	ancillary.length = header.msg_controllen as usize;
 	Ok(size)
 }
 
