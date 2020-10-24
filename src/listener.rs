@@ -1,16 +1,15 @@
-use ::mio::Ready;
+use futures::future::poll_fn;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::net::SocketAddr;
 use std::path::Path;
 use std::task::{Context, Poll};
-use tokio::future::poll_fn;
-use tokio::io::PollEvented;
+use tokio::io::unix::AsyncFd;
 
 use crate::UnixSeqpacket;
 
 /// Listener for Unix seqpacket sockets.
 pub struct UnixSeqpacketListener {
-	io: PollEvented<crate::mio::EventedSocket>,
+	io: AsyncFd<socket2::Socket>,
 }
 
 impl std::fmt::Debug for UnixSeqpacketListener {
@@ -23,8 +22,7 @@ impl std::fmt::Debug for UnixSeqpacketListener {
 
 impl UnixSeqpacketListener {
 	fn new(socket: socket2::Socket) -> std::io::Result<Self> {
-		let socket = crate::mio::EventedSocket::new(socket);
-		let io = PollEvented::new(socket)?;
+		let io = AsyncFd::new(socket)?;
 		Ok(Self { io })
 	}
 
@@ -62,16 +60,13 @@ impl UnixSeqpacketListener {
 
 	/// Check if there is a connection ready to accept.
 	pub fn poll_accept(&mut self, cx: &mut Context) -> Poll<std::io::Result<(UnixSeqpacket, SocketAddr)>> {
-		let ready = self.io.poll_read_ready(cx, Ready::readable())?;
-		if ready.is_pending() {
-			return Poll::Pending;
-		}
+		let mut ready_guard = ready!(self.io.poll_read_ready(cx)?);
 
 		let (socket, addr) = match self.io.get_ref().accept() {
 			Ok(x) => x,
 			Err(e) => {
 				if e.kind() == std::io::ErrorKind::WouldBlock {
-					self.io.clear_read_ready(cx, Ready::readable())?;
+					ready_guard.clear_ready();
 					return Poll::Pending;
 				} else {
 					return Poll::Ready(Err(e));

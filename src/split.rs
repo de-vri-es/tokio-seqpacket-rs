@@ -1,6 +1,6 @@
+use futures::future::poll_fn;
 use std::io::{IoSlice, IoSliceMut};
 use std::task::{Context, Poll};
-use tokio::future::poll_fn;
 
 use crate::ancillary::SocketAncillary;
 use crate::UnixSeqpacket;

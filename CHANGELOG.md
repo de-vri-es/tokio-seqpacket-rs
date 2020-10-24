@@ -1,3 +1,6 @@
+v0.3.0:
+  * Update to tokio 0.3.2.
+
 v0.2.1:
   * Fix receiving of ancillary data.
 

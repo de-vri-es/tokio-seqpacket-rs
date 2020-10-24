@@ -1,17 +1,16 @@
-use ::mio::Ready;
 use std::io::{IoSlice, IoSliceMut};
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use std::task::{Context, Poll};
-use tokio::future::poll_fn;
-use tokio::io::PollEvented;
+use futures::future::poll_fn;
+use tokio::io::unix::AsyncFd;
 use tokio::net::unix::UCred;
 
 use crate::ancillary::SocketAncillary;
 
 /// Unix seqpacket socket.
 pub struct UnixSeqpacket {
-	io: PollEvented<crate::mio::EventedSocket>,
+	io: AsyncFd<socket2::Socket>,
 }
 
 impl std::fmt::Debug for UnixSeqpacket {
@@ -20,19 +19,9 @@ impl std::fmt::Debug for UnixSeqpacket {
 	}
 }
 
-macro_rules! ready {
-	($e:expr) => {
-		match $e {
-			Poll::Pending => return Poll::Pending,
-			Poll::Ready(x) => x,
-			}
-	};
-}
-
 impl UnixSeqpacket {
 	pub(crate) fn new(socket: socket2::Socket) -> std::io::Result<Self> {
-		let socket = crate::mio::EventedSocket::new(socket);
-		let io = PollEvented::new(socket)?;
+		let io = AsyncFd::new(socket)?;
 		Ok(Self { io })
 	}
 
@@ -51,7 +40,7 @@ impl UnixSeqpacket {
 		};
 
 		let socket = Self::new(socket)?;
-		poll_fn(|cx| socket.io.poll_write_ready(cx)).await?;
+		socket.io.writable().await?.retain_ready();
 		Ok(socket)
 	}
 
@@ -267,11 +256,11 @@ fn check_returned_size(ret: isize) -> std::io::Result<usize> {
 
 /// Send data on the socket to the connected peer without blocking.
 pub(crate) fn poll_send(socket: &UnixSeqpacket, cx: &mut Context, buffer: &[u8]) -> Poll<std::io::Result<usize>> {
-	ready!(socket.io.poll_write_ready(cx)?);
+	let mut ready_guard = ready!(socket.io.poll_write_ready(cx)?);
 
 	match socket.io.get_ref().send(buffer) {
 		Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-			socket.io.clear_write_ready(cx)?;
+			ready_guard.clear_ready();
 			Poll::Pending
 		},
 		x => Poll::Ready(x),
@@ -290,11 +279,11 @@ pub(crate) fn poll_send_vectored_with_ancillary(
 	buffer: &[IoSlice],
 	ancillary: &mut SocketAncillary,
 ) -> Poll<std::io::Result<usize>> {
-	ready!(socket.io.poll_write_ready(cx)?);
+	let mut ready_guard = ready!(socket.io.poll_write_ready(cx)?);
 
 	match send_msg(socket.io.get_ref(), buffer, ancillary) {
 		Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-			socket.io.clear_write_ready(cx)?;
+			ready_guard.clear_ready();
 			Poll::Pending
 		},
 		x => Poll::Ready(x),
@@ -303,11 +292,11 @@ pub(crate) fn poll_send_vectored_with_ancillary(
 
 /// Receive data on the socket from the connected peer without blocking.
 pub(crate) fn poll_recv(socket: &UnixSeqpacket, cx: &mut Context, buffer: &mut [u8]) -> Poll<std::io::Result<usize>> {
-	ready!(socket.io.poll_read_ready(cx, Ready::readable())?);
+	let mut ready_guard = ready!(socket.io.poll_read_ready(cx)?);
 
 	match socket.io.get_ref().recv(buffer) {
 		Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-			socket.io.clear_read_ready(cx, Ready::readable())?;
+			ready_guard.clear_ready();
 			Poll::Pending
 		},
 		x => Poll::Ready(x),
@@ -326,11 +315,11 @@ pub(crate) fn poll_recv_vectored_with_ancillary(
 	buffer: &mut [IoSliceMut],
 	ancillary: &mut SocketAncillary,
 ) -> Poll<std::io::Result<usize>> {
-	ready!(socket.io.poll_read_ready(cx, Ready::readable())?);
+	let mut ready_guard = ready!(socket.io.poll_read_ready(cx)?);
 
 	match recv_msg(socket.io.get_ref(), buffer, ancillary) {
 		Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-			socket.io.clear_read_ready(cx, Ready::readable())?;
+			ready_guard.clear_ready();
 			Poll::Pending
 		},
 		x => Poll::Ready(x),

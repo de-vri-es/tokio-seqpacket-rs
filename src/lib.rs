@@ -46,9 +46,17 @@
 
 #![warn(missing_docs)]
 
+macro_rules! ready {
+	($e:expr) => {
+		match $e {
+			Poll::Pending => return Poll::Pending,
+			Poll::Ready(x) => x,
+		}
+	};
+}
+
 pub mod ancillary;
 mod listener;
-mod mio;
 mod socket;
 mod split;
 mod ucred;
