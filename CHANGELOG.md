@@ -1,5 +1,6 @@
 v0.3.0:
   * Update to tokio 0.3.2.
+  * Report peer credentials with own `UCred` type since tokio made the construction private.
 
 v0.2.1:
   * Fix receiving of ancillary data.

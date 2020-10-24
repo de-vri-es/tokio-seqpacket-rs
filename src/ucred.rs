@@ -1,127 +1,162 @@
-// Copied mostly verbatim from tokio.
-// Downloaded from: https://raw.githubusercontent.com/tokio-rs/tokio/master/tokio/src/net/unix/ucred.rs
+use libc::{gid_t, pid_t, uid_t};
+use std::os::unix::io::AsRawFd;
 
-use tokio::net::unix::UCred;
+/// Credentials of a process
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+pub struct UCred {
+	/// PID (process ID) of the process
+	pid: Option<pid_t>,
+	/// UID (user ID) of the process
+	uid: uid_t,
+	/// GID (group ID) of the process
+	gid: gid_t,
+}
+
+impl UCred {
+	/// Get the credentials of a connected peer for a Unix socket.
+	pub fn from_socket_peer<T: AsRawFd>(socket: &T) -> std::io::Result<Self> {
+		get_peer_cred(socket)
+	}
+
+	/// Gets UID (user ID) of the process.
+	pub fn uid(&self) -> uid_t {
+		self.uid
+	}
+
+	/// Gets GID (group ID) of the process.
+	pub fn gid(&self) -> gid_t {
+		self.gid
+	}
+
+	/// Gets PID (process ID) of the process.
+	///
+	/// This is only implemented under Linux, Android, iOS, macOS, Solaris and
+	/// Illumos. On other plaforms this will always return `None`.
+	pub fn pid(&self) -> Option<pid_t> {
+		self.pid
+	}
+}
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
-pub(crate) use self::impl_linux::get_peer_cred;
+fn get_peer_cred<T: AsRawFd>(sock: &T) -> std::io::Result<UCred> {
+	use libc::{c_void, getsockopt, socklen_t, ucred, SOL_SOCKET, SO_PEERCRED};
 
-#[cfg(any(
-	target_os = "dragonfly",
-	target_os = "macos",
-	target_os = "ios",
-	target_os = "freebsd",
-	target_os = "netbsd",
-	target_os = "openbsd"
-))]
-pub(crate) use self::impl_macos::get_peer_cred;
+	let raw_fd = sock.as_raw_fd();
 
-#[cfg(any(target_os = "solaris", target_os = "illumos"))]
-pub(crate) use self::impl_solaris::get_peer_cred;
+	let mut ucred = ucred {
+		pid: 0,
+		uid: 0,
+		gid: 0,
+	};
 
-#[cfg(any(target_os = "linux", target_os = "android"))]
-pub(crate) mod impl_linux {
-	pub(crate) fn get_peer_cred(sock: &socket2::Socket) -> std::io::Result<super::UCred> {
-		use std::os::unix::io::AsRawFd;
+	let mut ucred_size = std::mem::size_of::<ucred>() as socklen_t;
 
-		unsafe {
-			let raw_fd = sock.as_raw_fd();
+	let ret = unsafe {
+		getsockopt(
+			raw_fd,
+			SOL_SOCKET,
+			SO_PEERCRED,
+			&mut ucred as *mut ucred as *mut c_void,
+			&mut ucred_size,
+		)
+	};
 
-			let mut ucred = libc::ucred { pid: 0, uid: 0, gid: 0 };
-
-			let ucred_size = std::mem::size_of::<libc::ucred>();
-
-			// These paranoid checks should be optimized-out
-			assert!(std::mem::size_of::<u32>() <= std::mem::size_of::<usize>());
-			assert!(ucred_size <= u32::max_value() as usize);
-
-			let mut ucred_size = ucred_size as libc::socklen_t;
-
-			let ret = libc::getsockopt(
-				raw_fd,
-				libc::SOL_SOCKET,
-				libc::SO_PEERCRED,
-				&mut ucred as *mut libc::ucred as *mut std::ffi::c_void,
-				&mut ucred_size,
-			);
-			if ret == 0 && ucred_size as usize == std::mem::size_of::<libc::ucred>() {
-				Ok(super::UCred {
-					uid: ucred.uid,
-					gid: ucred.gid,
-				})
-			} else {
-				Err(std::io::Error::last_os_error())
-			}
-		}
+	if ret == 0 {
+		Ok(UCred {
+			uid: ucred.uid,
+			gid: ucred.gid,
+			pid: Some(ucred.pid),
+		})
+	} else {
+		Err(std::io::Error::last_os_error())
 	}
 }
 
 #[cfg(any(
 	target_os = "dragonfly",
-	target_os = "macos",
-	target_os = "ios",
 	target_os = "freebsd",
 	target_os = "netbsd",
 	target_os = "openbsd"
 ))]
-pub(crate) mod impl_macos {
-	use std::mem::MaybeUninit;
-	use std::os::unix::io::AsRawFd;
+fn get_peer_cred<T: AsRawFd>(sock: &T) -> std::io::Result<UCred> {
+	let raw_fd = sock.as_raw_fd();
 
-	pub(crate) fn get_peer_cred(sock: &socket2::Socket) -> std::io::Result<super::UCred> {
-		unsafe {
-			let raw_fd = sock.as_raw_fd();
+	let mut uid = 0;
+	let mut gid = 0;
 
-			let mut uid = MaybeUninit::uninit();
-			let mut gid = MaybeUninit::uninit();
+	let ret = unsafe {
+		getpeereid(raw_fd, uid.as_mut_ptr(), gid.as_mut_ptr());
+	};
 
-			let ret = libc::getpeereid(raw_fd, uid.as_mut_ptr(), gid.as_mut_ptr());
+	if ret == 0 {
+		Ok(UCred {
+			uid,
+			gid,
+			pid: None,
+		})
+	} else {
+		Err(std::io::Error::last_os_error())
+	}
+}
 
-			if ret == 0 {
-				Ok(super::UCred {
-					uid: uid.assume_init(),
-					gid: gid.assume_init(),
-				})
-			} else {
-				Err(io::Error::last_os_error())
-			}
-		}
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+fn get_peer_cred<T: AsRawFd>(sock: &T) -> std::io::Result<UCred> {
+	let raw_fd = sock.as_raw_fd();
+
+	let mut uid = 0 as uid_t;
+	let mut gid = 0 as gid_t;
+	let mut pid = 0 as pid_t;
+	let mut pid_size = size_of::<pid_t>() as u32;
+
+	let ret = unsafe {
+		getsockopt(
+			raw_fd,
+			SOL_LOCAL,
+			LOCAL_PEEREPID,
+			pid.as_mut_ptr() as *mut c_void,
+			pid_size.as_mut_ptr(),
+		)
+	};
+	if ret != 0 {
+		return Err(std::io::Error::last_os_error());
+	}
+
+	let ret = unsafe {
+		getpeereid(raw_fd, uid.as_mut_ptr(), gid.as_mut_ptr())
+	};
+
+	if ret == 0 {
+		Ok(UCred {
+			uid,
+			gid,
+			pid: Some(pid),
+		})
+	} else {
+		Err(std::io::Error::last_os_error())
 	}
 }
 
 #[cfg(any(target_os = "solaris", target_os = "illumos"))]
-pub(crate) mod impl_solaris {
-	use std::os::unix::io::AsRawFd;
+fn get_peer_cred<T: AsRawFd>(sock: &T) -> std::io::Result<UCred> {
+	let raw_fd = sock.as_raw_fd();
+	let mut cred = std::ptr::null_mut();
+	unsafe {
+		let ret = libc::getpeerucred(raw_fd, &mut cred);
 
-	#[allow(non_camel_case_types)]
-	enum ucred_t {}
+		if ret == 0 {
+			let uid = libc::ucred_geteuid(cred);
+			let gid = libc::ucred_getegid(cred);
+			let pid = libc::ucred_getpid(cred);
 
-	extern "C" {
-		fn ucred_free(cred: *mut ucred_t);
-		fn ucred_geteuid(cred: *const ucred_t) -> libc::uid_t;
-		fn ucred_getegid(cred: *const ucred_t) -> libc::gid_t;
+			libc::ucred_free(cred);
 
-		fn getpeerucred(fd: std::os::raw::c_int, cred: *mut *mut ucred_t) -> std::os::raw::c_int;
-	}
-
-	pub(crate) fn get_peer_cred(sock: &socket2::Socket) -> std::io::Result<super::UCred> {
-		unsafe {
-			let raw_fd = sock.as_raw_fd();
-
-			let mut cred = std::ptr::null_mut::<*mut ucred_t>() as *mut ucred_t;
-
-			let ret = getpeerucred(raw_fd, &mut cred);
-
-			if ret == 0 {
-				let uid = ucred_geteuid(cred);
-				let gid = ucred_getegid(cred);
-
-				ucred_free(cred);
-
-				Ok(super::UCred { uid, gid })
-			} else {
-				Err(std::io::Error::last_os_error())
-			}
+			Ok(UCred {
+				uid,
+				gid,
+				pid: Some(pid),
+			})
+		} else {
+			Err(std::io::Error::last_os_error())
 		}
 	}
 }

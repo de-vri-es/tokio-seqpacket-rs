@@ -4,8 +4,8 @@ use std::path::Path;
 use std::task::{Context, Poll};
 use futures::future::poll_fn;
 use tokio::io::unix::AsyncFd;
-use tokio::net::unix::UCred;
 
+use crate::UCred;
 use crate::ancillary::SocketAncillary;
 
 /// Unix seqpacket socket.
@@ -77,8 +77,11 @@ impl UnixSeqpacket {
 	}
 
 	/// Get the effective credentials of the process which called `connect` or `pair`.
+	///
+	/// Note that this is not necessarily the process that currently has the file descriptor
+	/// of the other side of the connection.
 	pub fn peer_cred(&self) -> std::io::Result<UCred> {
-		crate::ucred::get_peer_cred(self.io.get_ref())
+		UCred::from_socket_peer(&self.io)
 	}
 
 	/// Get the value of the `SO_ERROR` option.
