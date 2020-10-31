@@ -30,8 +30,7 @@
 //!
 //! # Example
 //! ```no_run
-//! # #[tokio::main]
-//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! # async fn foo() -> Result<(), Box<dyn std::error::Error>> {
 //! use tokio_seqpacket::UnixSeqpacket;
 //!
 //! let mut socket = UnixSeqpacket::connect("/run/foo.sock").await?;

@@ -30,10 +30,10 @@ impl<'a> ReadHalf<'a> {
 		self.0.peer_addr()
 	}
 
-	/// Get the effective credentials of the process which called `connect` or `pair`.
-	pub fn peer_cred(&self) -> std::io::Result<tokio::net::unix::UCred> {
-		self.0.peer_cred()
-	}
+	// /// Get the effective credentials of the process which called `connect` or `pair`.
+	// pub fn peer_cred(&self) -> std::io::Result<tokio::net::unix::UCred> {
+	// 	self.0.peer_cred()
+	// }
 
 	/// Try to receive data on the socket from the connected peer without blocking.
 	///
@@ -109,10 +109,10 @@ impl<'a> WriteHalf<'a> {
 		self.0.peer_addr()
 	}
 
-	/// Get the effective credentials of the process which called `connect` or `pair`.
-	pub fn peer_cred(&self) -> std::io::Result<tokio::net::unix::UCred> {
-		self.0.peer_cred()
-	}
+	// /// Get the effective credentials of the process which called `connect` or `pair`.
+	// pub fn peer_cred(&self) -> std::io::Result<tokio::net::unix::UCred> {
+	// 	self.0.peer_cred()
+	// }
 
 	/// Shuts down the write halve of the connection.
 	pub fn shutdown(&self) -> std::io::Result<()> {
