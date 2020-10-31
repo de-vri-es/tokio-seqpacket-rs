@@ -17,7 +17,10 @@ async fn send_recv() {
 fn send_recv_out_of_order() {
 	use std::sync::atomic::{AtomicBool, Ordering};
 
-	let mut runtime = tokio::runtime::Runtime::new().unwrap();
+	let mut runtime = tokio::runtime::Builder::new_current_thread()
+		.enable_all()
+		.build()
+		.unwrap();
 	let local = tokio::task::LocalSet::new();
 
 	local.block_on(&mut runtime, async {

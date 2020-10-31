@@ -8,7 +8,10 @@ fn unix_seqpacket_listener() {
 	let dir = tempdir().unwrap();
 	let listener = dir.path().join("listener.sock");
 
-	let mut runtime = tokio::runtime::Runtime::new().unwrap();
+	let mut runtime = tokio::runtime::Builder::new_current_thread()
+		.enable_all()
+		.build()
+		.unwrap();
 	let local = tokio::task::LocalSet::new();
 
 	local.block_on(&mut runtime, async move {
