@@ -27,7 +27,13 @@ pub(crate) type CmsgLen = usize;
 ))]
 pub(crate) type CmsgLen = libc::socklen_t;
 
-fn add_to_ancillary_data<T>(buffer: &mut [u8], length: &mut usize, source: &[T], cmsg_level: libc::c_int, cmsg_type: libc::c_int) -> bool {
+fn add_to_ancillary_data<T>(
+	buffer: &mut [u8],
+	length: &mut usize,
+	source: &[T],
+	cmsg_level: libc::c_int,
+	cmsg_type: libc::c_int,
+) -> bool {
 	let source_len = if let Some(source_len) = source.len().checked_mul(size_of::<T>()) {
 		if let Ok(source_len) = u32::try_from(source_len) {
 			source_len
@@ -361,7 +367,13 @@ impl<'a> SocketAncillary<'a> {
 	/// and type `SCM_RIGHTS`.
 	pub fn add_fds(&mut self, fds: &[RawFd]) -> bool {
 		self.truncated = false;
-		add_to_ancillary_data(&mut self.buffer, &mut self.length, fds, libc::SOL_SOCKET, libc::SCM_RIGHTS)
+		add_to_ancillary_data(
+			&mut self.buffer,
+			&mut self.length,
+			fds,
+			libc::SOL_SOCKET,
+			libc::SCM_RIGHTS,
+		)
 	}
 
 	/// Add credentials to the ancillary data.
@@ -374,7 +386,13 @@ impl<'a> SocketAncillary<'a> {
 	#[cfg(any(doc, target_os = "android", target_os = "linux",))]
 	pub fn add_creds(&mut self, creds: &[SocketCred]) -> bool {
 		self.truncated = false;
-		add_to_ancillary_data(&mut self.buffer, &mut self.length, creds, libc::SOL_SOCKET, libc::SCM_CREDENTIALS)
+		add_to_ancillary_data(
+			&mut self.buffer,
+			&mut self.length,
+			creds,
+			libc::SOL_SOCKET,
+			libc::SCM_CREDENTIALS,
+		)
 	}
 
 	/// Clears the ancillary data, removing all values.

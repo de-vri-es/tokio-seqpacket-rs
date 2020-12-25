@@ -1,12 +1,12 @@
+use futures::future::poll_fn;
 use std::io::{IoSlice, IoSliceMut};
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use std::task::{Context, Poll};
-use futures::future::poll_fn;
 use tokio::io::unix::AsyncFd;
 
-use crate::UCred;
 use crate::ancillary::SocketAncillary;
+use crate::UCred;
 
 /// Unix seqpacket socket.
 pub struct UnixSeqpacket {
@@ -15,7 +15,9 @@ pub struct UnixSeqpacket {
 
 impl std::fmt::Debug for UnixSeqpacket {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		f.debug_struct("UnixSeqpacket").field("fd", &self.io.get_ref().as_raw_fd()).finish()
+		f.debug_struct("UnixSeqpacket")
+			.field("fd", &self.io.get_ref().as_raw_fd())
+			.finish()
 	}
 }
 
@@ -224,7 +226,11 @@ fn send_msg(socket: &socket2::Socket, buffer: &[IoSlice], ancillary: &mut Socket
 	unsafe { check_returned_size(libc::sendmsg(fd, &header as *const _, SEND_MSG_DEFAULT_FLAGS)) }
 }
 
-fn recv_msg(socket: &socket2::Socket, buffer: &mut [IoSliceMut], ancillary: &mut SocketAncillary) -> std::io::Result<usize> {
+fn recv_msg(
+	socket: &socket2::Socket,
+	buffer: &mut [IoSliceMut],
+	ancillary: &mut SocketAncillary,
+) -> std::io::Result<usize> {
 	let control_data = match ancillary.capacity() {
 		0 => std::ptr::null_mut(),
 		_ => ancillary.buffer.as_mut_ptr() as *mut std::os::raw::c_void,
@@ -268,7 +274,11 @@ pub(crate) fn poll_send(socket: &UnixSeqpacket, cx: &mut Context, buffer: &[u8])
 }
 
 /// Send data on the socket to the connected peer without blocking.
-pub(crate) fn poll_send_vectored(socket: &UnixSeqpacket, cx: &mut Context, buffer: &[IoSlice]) -> Poll<std::io::Result<usize>> {
+pub(crate) fn poll_send_vectored(
+	socket: &UnixSeqpacket,
+	cx: &mut Context,
+	buffer: &[IoSlice],
+) -> Poll<std::io::Result<usize>> {
 	poll_send_vectored_with_ancillary(socket, cx, buffer, &mut SocketAncillary::new(&mut []))
 }
 
@@ -304,7 +314,11 @@ pub(crate) fn poll_recv(socket: &UnixSeqpacket, cx: &mut Context, buffer: &mut [
 }
 
 /// Receive data on the socket from the connected peer without blocking.
-pub(crate) fn poll_recv_vectored(socket: &UnixSeqpacket, cx: &mut Context, buffer: &mut [IoSliceMut]) -> Poll<std::io::Result<usize>> {
+pub(crate) fn poll_recv_vectored(
+	socket: &UnixSeqpacket,
+	cx: &mut Context,
+	buffer: &mut [IoSliceMut],
+) -> Poll<std::io::Result<usize>> {
 	poll_recv_vectored_with_ancillary(socket, cx, buffer, &mut SocketAncillary::new(&mut []))
 }
 

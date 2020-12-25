@@ -43,11 +43,7 @@ fn get_peer_cred<T: AsRawFd>(sock: &T) -> std::io::Result<UCred> {
 
 	let raw_fd = sock.as_raw_fd();
 
-	let mut ucred = ucred {
-		pid: 0,
-		uid: 0,
-		gid: 0,
-	};
+	let mut ucred = ucred { pid: 0, uid: 0, gid: 0 };
 
 	let mut ucred_size = std::mem::size_of::<ucred>() as socklen_t;
 
@@ -89,11 +85,7 @@ fn get_peer_cred<T: AsRawFd>(sock: &T) -> std::io::Result<UCred> {
 	};
 
 	if ret == 0 {
-		Ok(UCred {
-			uid,
-			gid,
-			pid: None,
-		})
+		Ok(UCred { uid, gid, pid: None })
 	} else {
 		Err(std::io::Error::last_os_error())
 	}
@@ -121,9 +113,7 @@ fn get_peer_cred<T: AsRawFd>(sock: &T) -> std::io::Result<UCred> {
 		return Err(std::io::Error::last_os_error());
 	}
 
-	let ret = unsafe {
-		getpeereid(raw_fd, uid.as_mut_ptr(), gid.as_mut_ptr())
-	};
+	let ret = unsafe { getpeereid(raw_fd, uid.as_mut_ptr(), gid.as_mut_ptr()) };
 
 	if ret == 0 {
 		Ok(UCred {
