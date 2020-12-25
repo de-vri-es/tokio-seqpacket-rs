@@ -1,3 +1,6 @@
+v0.4.1
+  * Regenerate `README.md` from library documentation.
+
 v0.4.0
   * Make I/O functions take `&self` instead of `&mut self`.
   * Deprecate the `split()` API.
