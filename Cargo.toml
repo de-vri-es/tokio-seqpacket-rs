@@ -18,9 +18,9 @@ edition = "2018"
 futures = "0.3.7"
 libc = "0.2.77"
 socket2 = { version = "0.3.15", features = ["unix", "pair"] }
-tokio = { version = "0.3.2", features = ["net"] }
+tokio = { version = "1.0", features = ["net"] }
 
 [dev-dependencies]
 assert2 = "0.3.3"
-tokio = { version = "0.3.2", features = ["rt", "macros", "time"] }
+tokio = { version = "1.0", features = ["rt", "macros", "time"] }
 tempfile = "3.1.0"
