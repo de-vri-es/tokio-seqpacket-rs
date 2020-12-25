@@ -21,12 +21,9 @@
 //!
 //! Seqpacket sockets have well-defined semantics when sending or receiving on the same socket from different threads.
 //! Although the order is not guaranteed in that scenario, each datagram will be delivered intact.
-//! As such, you might except the socket to allow sending and receiving from a shared reference.
-//!
-//! However, the tokio runtime only supports a single read task and a single write task waiting for readiness events.
-//! For that reason, you can only send and receive messages through an exclusive reference.
-//!
-//! You can split the socket into a read and write half using [`UnixSeqpacket::split()`].
+//! Since tokio 0.3, it is also possible for multiple tasks to await the same file descriptor.
+//! As such, all I/O functions now take `&self` instead of `&mut self`,
+//! and the `split()` API has been deprecated.
 //!
 //! # Example
 //! ```no_run
@@ -57,13 +54,26 @@ macro_rules! ready {
 pub mod ancillary;
 mod listener;
 mod socket;
-mod split;
 mod ucred;
 
 pub use listener::UnixSeqpacketListener;
 pub use socket::UnixSeqpacket;
-pub use split::{ReadHalf, WriteHalf};
+
 pub use ucred::UCred;
+
+#[doc(hidden)]
+#[deprecated(
+	since = "0.4.0",
+	note = "all I/O functions now take a shared reference to self, so splitting is no longer necessary"
+)]
+pub type ReadHalf<'a> = &'a UnixSeqpacket;
+
+#[doc(hidden)]
+#[deprecated(
+	since = "0.4.0",
+	note = "all I/O functions now take a shared reference to self, so splitting is no longer necessary"
+)]
+pub type WriteHalf<'a> = &'a UnixSeqpacket;
 
 /// Get the socket type for a close-on-exec non-blocking seqpacket socket.
 fn socket_type() -> socket2::Type {

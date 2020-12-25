@@ -3,11 +3,12 @@ use tokio_seqpacket::UnixSeqpacket;
 
 /// Test a simple send and recv call.
 #[tokio::test]
+#[allow(deprecated)] // It may be deprecated, but it should still work.
 async fn send_recv() {
-	let_assert!(Ok((mut a, mut b)) = UnixSeqpacket::pair());
+	let_assert!(Ok((a, b)) = UnixSeqpacket::pair());
 
-	let (mut read_a, mut write_a) = a.split();
-	let (mut read_b, mut write_b) = b.split();
+	let (read_a, write_a) = a.split();
+	let (read_b, write_b) = b.split();
 
 	assert!(let Ok(_) = write_a.send(b"Hello B!").await);
 	assert!(let Ok(_) = write_b.send(b"Hello A!").await);

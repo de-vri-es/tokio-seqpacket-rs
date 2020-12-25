@@ -52,16 +52,13 @@ impl UnixSeqpacket {
 		Ok((a, b))
 	}
 
-	/// Split the socket in a read half and a write half.
-	///
-	/// The two halves borrow `self`, so they can not be moved into different tasks.
-	/// An owned version of `Self::split()` is still planned.
-	pub fn split(&mut self) -> (crate::ReadHalf, crate::WriteHalf) {
-		unsafe {
-			let read_half = crate::ReadHalf::new(self);
-			let write_half = crate::WriteHalf::new(self);
-			(read_half, write_half)
-		}
+	#[doc(hidden)]
+	#[deprecated(
+		since = "0.4.0",
+		note = "all I/O functions now take a shared reference to self, so splitting is no longer necessary"
+	)]
+	pub fn split(&self) -> (&Self, &Self) {
+		(self, self)
 	}
 
 	/// Get the socket address of the local half of this connection.
@@ -92,14 +89,14 @@ impl UnixSeqpacket {
 	/// Try to send data on the socket to the connected peer without blocking.
 	///
 	/// If the socket is not ready yet, the current task is scheduled to wake up when the socket becomes writeable.
-	pub fn poll_send(&mut self, cx: &mut Context, buffer: &[u8]) -> Poll<std::io::Result<usize>> {
+	pub fn poll_send(&self, cx: &mut Context, buffer: &[u8]) -> Poll<std::io::Result<usize>> {
 		poll_send(self, cx, buffer)
 	}
 
 	/// Try to send data on the socket to the connected peer without blocking.
 	///
 	/// If the socket is not ready yet, the current task is scheduled to wake up when the socket becomes writeable.
-	pub fn poll_send_vectored(&mut self, cx: &mut Context, buffer: &[IoSlice]) -> Poll<std::io::Result<usize>> {
+	pub fn poll_send_vectored(&self, cx: &mut Context, buffer: &[IoSlice]) -> Poll<std::io::Result<usize>> {
 		poll_send_vectored(self, cx, buffer)
 	}
 
@@ -107,7 +104,7 @@ impl UnixSeqpacket {
 	///
 	/// If the socket is not ready yet, the current task is scheduled to wake up when the socket becomes writeable.
 	pub fn poll_send_vectored_with_ancillary(
-		&mut self,
+		&self,
 		cx: &mut Context,
 		buffer: &[IoSlice],
 		ancillary: &mut SocketAncillary,
@@ -116,18 +113,18 @@ impl UnixSeqpacket {
 	}
 
 	/// Send data on the socket to the connected peer.
-	pub async fn send(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
+	pub async fn send(&self, buffer: &[u8]) -> std::io::Result<usize> {
 		poll_fn(|cx| self.poll_send(cx, buffer)).await
 	}
 
 	/// Send data on the socket to the connected peer.
-	pub async fn send_vectored(&mut self, buffer: &[IoSlice<'_>]) -> std::io::Result<usize> {
+	pub async fn send_vectored(&self, buffer: &[IoSlice<'_>]) -> std::io::Result<usize> {
 		poll_fn(|cx| self.poll_send_vectored(cx, buffer)).await
 	}
 
 	/// Send data with ancillary data on the socket to the connected peer.
 	pub async fn send_vectored_with_ancillary(
-		&mut self,
+		&self,
 		buffer: &[IoSlice<'_>],
 		ancillary: &mut SocketAncillary<'_>,
 	) -> std::io::Result<usize> {
@@ -137,14 +134,14 @@ impl UnixSeqpacket {
 	/// Try to receive data on the socket from the connected peer without blocking.
 	///
 	/// If there is no data ready yet, the current task is scheduled to wake up when the socket becomes readable.
-	pub fn poll_recv(&mut self, cx: &mut Context, buffer: &mut [u8]) -> Poll<std::io::Result<usize>> {
+	pub fn poll_recv(&self, cx: &mut Context, buffer: &mut [u8]) -> Poll<std::io::Result<usize>> {
 		poll_recv(self, cx, buffer)
 	}
 
 	/// Try to receive data on the socket from the connected peer without blocking.
 	///
 	/// If there is no data ready yet, the current task is scheduled to wake up when the socket becomes readable.
-	pub fn poll_recv_vectored(&mut self, cx: &mut Context, buffer: &mut [IoSliceMut]) -> Poll<std::io::Result<usize>> {
+	pub fn poll_recv_vectored(&self, cx: &mut Context, buffer: &mut [IoSliceMut]) -> Poll<std::io::Result<usize>> {
 		poll_recv_vectored(self, cx, buffer)
 	}
 
@@ -152,7 +149,7 @@ impl UnixSeqpacket {
 	///
 	/// If there is no data ready yet, the current task is scheduled to wake up when the socket becomes readable.
 	pub fn poll_recv_vectored_with_ancillary(
-		&mut self,
+		&self,
 		cx: &mut Context,
 		buffer: &mut [IoSliceMut],
 		ancillary: &mut SocketAncillary,
@@ -161,18 +158,18 @@ impl UnixSeqpacket {
 	}
 
 	/// Receive data on the socket from the connected peer.
-	pub async fn recv(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+	pub async fn recv(&self, buffer: &mut [u8]) -> std::io::Result<usize> {
 		poll_fn(|cx| self.poll_recv(cx, buffer)).await
 	}
 
 	/// Receive data on the socket from the connected peer.
-	pub async fn recv_vectored(&mut self, buffer: &mut [IoSliceMut<'_>]) -> std::io::Result<usize> {
+	pub async fn recv_vectored(&self, buffer: &mut [IoSliceMut<'_>]) -> std::io::Result<usize> {
 		poll_fn(|cx| self.poll_recv_vectored(cx, buffer)).await
 	}
 
 	/// Receive data with ancillary data on the socket from the connected peer.
 	pub async fn recv_vectored_with_ancillary(
-		&mut self,
+		&self,
 		buffer: &mut [IoSliceMut<'_>],
 		ancillary: &mut SocketAncillary<'_>,
 	) -> std::io::Result<usize> {

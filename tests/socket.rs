@@ -4,7 +4,7 @@ use tokio_seqpacket::UnixSeqpacket;
 /// Test a simple send and recv call.
 #[tokio::test]
 async fn send_recv() {
-	let_assert!(Ok((mut a, mut b)) = UnixSeqpacket::pair());
+	let_assert!(Ok((a, b)) = UnixSeqpacket::pair());
 	assert!(let Ok(12) = a.send(b"Hello world!").await);
 
 	let mut buffer = [0u8; 128];
@@ -28,7 +28,7 @@ fn send_recv_out_of_order() {
 		// We're using a local task set to ensure we're single threaded.
 		static ABOUT_TO_READ: AtomicBool = AtomicBool::new(false);
 
-		let_assert!(Ok((mut a, mut b)) = UnixSeqpacket::pair());
+		let_assert!(Ok((a, b)) = UnixSeqpacket::pair());
 
 		// Spawning a task shouldn't run anything until the current task awaits something.
 		// Still, we use the atomic boolean to double-check that.
@@ -51,7 +51,7 @@ fn send_recv_out_of_order() {
 async fn send_recv_vectored() {
 	use std::io::{IoSlice, IoSliceMut};
 
-	let_assert!(Ok((mut a, mut b)) = UnixSeqpacket::pair());
+	let_assert!(Ok((a, b)) = UnixSeqpacket::pair());
 	assert!(let Ok(12) = a.send_vectored(&[
 		IoSlice::new(b"Hello"),
 		IoSlice::new(b" "),
