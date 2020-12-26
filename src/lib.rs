@@ -13,7 +13,7 @@
 //!
 //! # Passing file descriptors and other ancillary data.
 //!
-//! You can use [`send_vectored_with_ancillary`](UnixSeqpacket::send_vectored_with_ancillary) and [`recv_vectored_with_ancillary`](UnixSeqpacket::recv_vectored_with_ancillary)
+//! You can use [`send_vectored_with_ancillary`][UnixSeqpacket::send_vectored_with_ancillary] and [`recv_vectored_with_ancillary`][UnixSeqpacket::recv_vectored_with_ancillary]
 //! to send and receive ancillary data.
 //! This can be used to pass file descriptors and unix credentials over sockets.
 //!

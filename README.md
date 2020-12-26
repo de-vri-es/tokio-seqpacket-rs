@@ -18,7 +18,7 @@ You can also create a pair of connected sockets with [`UnixSeqpacket::pair()`].
 
 ## Passing file descriptors and other ancillary data.
 
-You can use [`send_vectored_with_ancillary`](UnixSeqpacket::send_vectored_with_ancillary) and [`recv_vectored_with_ancillary`](UnixSeqpacket::recv_vectored_with_ancillary)
+You can use [`send_vectored_with_ancillary`][UnixSeqpacket::send_vectored_with_ancillary] and [`recv_vectored_with_ancillary`][UnixSeqpacket::recv_vectored_with_ancillary]
 to send and receive ancillary data.
 This can be used to pass file descriptors and unix credentials over sockets.
 
@@ -42,7 +42,7 @@ let len = socket.recv(&mut buffer).await?;
 println!("{}", String::from_utf8_lossy(&buffer[..len]));
 ```
 
-[`UnixSeqpacketLister`]: https://docs.rs/tokio-seqpacket/latest/tokio_seqpacket/struct.UnixSeqpacketListener.html
+[`UnixSeqpacketListener`]: https://docs.rs/tokio-seqpacket/latest/tokio_seqpacket/struct.UnixSeqpacketListener.html
 [`UnixSeqpacket`]: https://docs.rs/tokio-seqpacket/latest/tokio_seqpacket/struct.UnixSeqpacket.html
 [`UnixSeqpacket::pair()`]: https://docs.rs/tokio-seqpacket/latest/tokio_seqpacket/struct.UnixSeqpacket.html#method.pair
 [UnixSeqpacket::send_vectored_with_ancillary]: https://docs.rs/tokio-seqpacket/latest/tokio_seqpacket/struct.UnixSeqpacket.html#method.send_vectored_with_ancillary

@@ -5,7 +5,7 @@
 
 {{readme}}
 
-[`UnixSeqpacketLister`]: https://docs.rs/tokio-seqpacket/latest/tokio_seqpacket/struct.UnixSeqpacketListener.html
+[`UnixSeqpacketListener`]: https://docs.rs/tokio-seqpacket/latest/tokio_seqpacket/struct.UnixSeqpacketListener.html
 [`UnixSeqpacket`]: https://docs.rs/tokio-seqpacket/latest/tokio_seqpacket/struct.UnixSeqpacket.html
 [`UnixSeqpacket::pair()`]: https://docs.rs/tokio-seqpacket/latest/tokio_seqpacket/struct.UnixSeqpacket.html#method.pair
 [UnixSeqpacket::send_vectored_with_ancillary]: https://docs.rs/tokio-seqpacket/latest/tokio_seqpacket/struct.UnixSeqpacket.html#method.send_vectored_with_ancillary

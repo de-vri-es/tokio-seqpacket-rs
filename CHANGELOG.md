@@ -1,3 +1,6 @@
+v0.4.2
+  * Fix links in `README.md`.
+
 v0.4.1
   * Regenerate `README.md` from library documentation.
 
