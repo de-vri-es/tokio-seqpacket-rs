@@ -59,6 +59,11 @@ impl UnixSeqpacket {
 	///
 	/// Registration of the file descriptor with the tokio runtime may fail.
 	/// For that reason, this function returns a [`std::io::Result`].
+	///
+	/// # Safety
+	/// This function is unsafe because the socket assumes it is the sole owner of the file descriptor.
+	/// Usage of this function could accidentally allow violating this contract
+	/// which can cause memory unsafety in code that relies on it being true.
 	pub unsafe fn from_raw_fd(fd: std::os::unix::io::RawFd) -> std::io::Result<Self> {
 		use std::os::unix::io::FromRawFd;
 		Self::new(socket2::Socket::from_raw_fd(fd))
