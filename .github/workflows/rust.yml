@@ -9,17 +9,24 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        build: [stable, beta, nightly]
+        build: [stable, beta, nightly, stable-musl]
         include:
           - build: stable
             os: ubuntu-latest
             rust: stable
+            target: x86_64-unknown-linux-gnu
           - build: beta
             os: ubuntu-latest
             rust: beta
+            target: x86_64-unknown-linux-gnu
           - build: nightly
             os: ubuntu-latest
             rust: nightly
+            target: x86_64-unknown-linux-gnu
+          - build: stable-musl
+            os: ubuntu-latest
+            rust: stable
+            target: x86_64-unknown-linux-musl
 
     steps:
       - name: Checkout code
@@ -38,12 +45,19 @@ jobs:
           toolchain: ${{ matrix.rust }}
           profile: minimal
           components: clippy
+          target: ${{ matrix.target }}
       - name: Build
         uses: actions-rs/cargo@v1
         with:
           command: build
           toolchain: ${{ matrix.rust }}
-          args: --all-features --color=always
+          args: --all-features --color=always --target ${{ matrix.target }}
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          toolchain: ${{ matrix.rust }}
+          args: --all-features --color=always --target ${{ matrix.target }}
       - name: Clippy
         uses: actions-rs/clippy-check@v1
         if: matrix.build == 'nightly'
@@ -51,9 +65,3 @@ jobs:
           toolchain: ${{ matrix.rust }}
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --release --all-features
-      - name: Test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          toolchain: ${{ matrix.rust }}
-          args: --all-features --color=always
