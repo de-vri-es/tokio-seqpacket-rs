@@ -241,12 +241,20 @@ fn send_msg(socket: &socket2::Socket, buffer: &[IoSlice], ancillary: &mut Socket
 	header.msg_name = std::ptr::null_mut();
 	header.msg_namelen = 0;
 	header.msg_iov = buffer.as_ptr() as *mut libc::iovec;
-	header.msg_iovlen = buffer.len().try_into()
-		.map_err(|_| std::io::ErrorKind::InvalidInput)?;
+	// This is not a no-op on all platforms.
+	#[allow(clippy::useless_conversion)]
+	{
+		header.msg_iovlen = buffer.len().try_into()
+			.map_err(|_| std::io::ErrorKind::InvalidInput)?;
+	}
 	header.msg_flags = 0;
 	header.msg_control = control_data;
-	header.msg_controllen = ancillary.len().try_into()
-		.map_err(|_| std::io::ErrorKind::InvalidInput)?;
+	// This is not a no-op on all platforms.
+	#[allow(clippy::useless_conversion)]
+	{
+		header.msg_controllen = ancillary.len().try_into()
+			.map_err(|_| std::io::ErrorKind::InvalidInput)?;
+	}
 
 	unsafe { check_returned_size(libc::sendmsg(fd, &header as *const _, SEND_MSG_DEFAULT_FLAGS)) }
 }
@@ -266,12 +274,20 @@ fn recv_msg(
 	header.msg_name = std::ptr::null_mut();
 	header.msg_namelen = 0;
 	header.msg_iov = buffer.as_ptr() as *mut libc::iovec;
-	header.msg_iovlen = buffer.len().try_into()
-		.map_err(|_| std::io::ErrorKind::InvalidInput)?;
+	// This is not a no-op on all platforms.
+	#[allow(clippy::useless_conversion)]
+	{
+		header.msg_iovlen = buffer.len().try_into()
+			.map_err(|_| std::io::ErrorKind::InvalidInput)?;
+	}
 	header.msg_flags = 0;
 	header.msg_control = control_data;
-	header.msg_controllen = ancillary.capacity().try_into()
-		.map_err(|_| std::io::ErrorKind::InvalidInput)?;
+	// This is not a no-op on all platforms.
+	#[allow(clippy::useless_conversion)]
+	{
+		header.msg_controllen = ancillary.capacity().try_into()
+			.map_err(|_| std::io::ErrorKind::InvalidInput)?;
+	}
 
 	let size = unsafe { check_returned_size(libc::recvmsg(fd, &mut header as *mut _, RECV_MSG_DEFAULT_FLAGS))? };
 	ancillary.truncated = header.msg_flags & libc::MSG_CTRUNC != 0;
