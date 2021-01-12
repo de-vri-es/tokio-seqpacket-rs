@@ -1,7 +1,7 @@
 use futures::future::poll_fn;
 use std::convert::TryInto;
 use std::io::{IoSlice, IoSliceMut};
-use std::os::unix::io::AsRawFd;
+use std::os::unix::io::{AsRawFd, IntoRawFd};
 use std::path::Path;
 use std::task::{Context, Poll};
 use tokio::io::unix::AsyncFd;
@@ -53,6 +53,25 @@ impl UnixSeqpacket {
 		let a = Self::new(a)?;
 		let b = Self::new(b)?;
 		Ok((a, b))
+	}
+
+	/// Wrap a raw file descriptor as [`UnixSeqpacket`].
+	///
+	/// Registration of the file descriptor with the tokio runtime may fail.
+	/// For that reason, this function returns a [`std::io::Result`].
+	pub unsafe fn from_raw_fd(fd: std::os::unix::io::RawFd) -> std::io::Result<Self> {
+		use std::os::unix::io::FromRawFd;
+		Self::new(socket2::Socket::from_raw_fd(fd))
+	}
+
+	/// Get the raw file descriptor of the socket.
+	pub fn as_raw_fd(&self) -> std::os::unix::io::RawFd {
+		self.io.as_raw_fd()
+	}
+
+	/// Deregister the socket from the tokio runtime and return the inner file descriptor.
+	pub fn into_raw_fd(self) -> std::os::unix::io::RawFd {
+		self.io.into_inner().into_raw_fd()
 	}
 
 	#[doc(hidden)]
@@ -186,6 +205,18 @@ impl UnixSeqpacket {
 	/// (see the documentation of `Shutdown`).
 	pub fn shutdown(&self, how: std::net::Shutdown) -> std::io::Result<()> {
 		self.io.get_ref().shutdown(how)
+	}
+}
+
+impl AsRawFd for UnixSeqpacket {
+	fn as_raw_fd(&self) -> std::os::unix::io::RawFd {
+		self.as_raw_fd()
+	}
+}
+
+impl IntoRawFd for UnixSeqpacket {
+	fn into_raw_fd(self) -> std::os::unix::io::RawFd {
+		self.into_raw_fd()
 	}
 }
 

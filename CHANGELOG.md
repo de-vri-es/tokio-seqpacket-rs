@@ -1,5 +1,6 @@
 v0.4.3
   * Fix compilation for `musl` targets.
+  * Add conversions to/from raw file descriptors.
 
 v0.4.2
   * Fix links in `README.md`.
