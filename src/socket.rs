@@ -1,4 +1,5 @@
 use futures::future::poll_fn;
+use std::convert::TryInto;
 use std::io::{IoSlice, IoSliceMut};
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
@@ -191,19 +192,6 @@ impl UnixSeqpacket {
 const SEND_MSG_DEFAULT_FLAGS: std::os::raw::c_int = libc::MSG_NOSIGNAL;
 const RECV_MSG_DEFAULT_FLAGS: std::os::raw::c_int = libc::MSG_NOSIGNAL | libc::MSG_CMSG_CLOEXEC;
 
-#[cfg(any(target_os = "android", all(target_os = "linux", target_env = "gnu")))]
-type CmsgLen = usize;
-
-#[cfg(any(
-	target_os = "dragonfly",
-	target_os = "emscripten",
-	target_os = "freebsd",
-	all(target_os = "linux", target_env = "musl",),
-	target_os = "netbsd",
-	target_os = "openbsd",
-))]
-type CmsgLen = std::os::raw::c_int;
-
 fn send_msg(socket: &socket2::Socket, buffer: &[IoSlice], ancillary: &mut SocketAncillary) -> std::io::Result<usize> {
 	ancillary.truncated = false;
 
@@ -213,15 +201,16 @@ fn send_msg(socket: &socket2::Socket, buffer: &[IoSlice], ancillary: &mut Socket
 	};
 
 	let fd = socket.as_raw_fd();
-	let header = libc::msghdr {
-		msg_name: std::ptr::null_mut(),
-		msg_namelen: 0,
-		msg_iov: buffer.as_ptr() as *mut libc::iovec,
-		msg_iovlen: buffer.len(),
-		msg_flags: 0,
-		msg_control: control_data,
-		msg_controllen: ancillary.len() as CmsgLen,
-	};
+	let mut header: libc::msghdr = unsafe { std::mem::zeroed() };
+	header.msg_name = std::ptr::null_mut();
+	header.msg_namelen = 0;
+	header.msg_iov = buffer.as_ptr() as *mut libc::iovec;
+	header.msg_iovlen = buffer.len().try_into()
+		.map_err(|_| std::io::ErrorKind::InvalidInput)?;
+	header.msg_flags = 0;
+	header.msg_control = control_data;
+	header.msg_controllen = ancillary.len().try_into()
+		.map_err(|_| std::io::ErrorKind::InvalidInput)?;
 
 	unsafe { check_returned_size(libc::sendmsg(fd, &header as *const _, SEND_MSG_DEFAULT_FLAGS)) }
 }
@@ -237,15 +226,17 @@ fn recv_msg(
 	};
 
 	let fd = socket.as_raw_fd();
-	let mut header = libc::msghdr {
-		msg_name: std::ptr::null_mut(),
-		msg_namelen: 0,
-		msg_iov: buffer.as_ptr() as *mut libc::iovec,
-		msg_iovlen: buffer.len(),
-		msg_flags: 0,
-		msg_control: control_data,
-		msg_controllen: ancillary.capacity() as CmsgLen,
-	};
+	let mut header: libc::msghdr = unsafe { std::mem::zeroed() };
+	header.msg_name = std::ptr::null_mut();
+	header.msg_namelen = 0;
+	header.msg_iov = buffer.as_ptr() as *mut libc::iovec;
+	header.msg_iovlen = buffer.len().try_into()
+		.map_err(|_| std::io::ErrorKind::InvalidInput)?;
+	header.msg_flags = 0;
+	header.msg_control = control_data;
+	header.msg_controllen = ancillary.capacity().try_into()
+		.map_err(|_| std::io::ErrorKind::InvalidInput)?;
+
 	let size = unsafe { check_returned_size(libc::recvmsg(fd, &mut header as *mut _, RECV_MSG_DEFAULT_FLAGS))? };
 	ancillary.truncated = header.msg_flags & libc::MSG_CTRUNC != 0;
 	ancillary.length = header.msg_controllen as usize;

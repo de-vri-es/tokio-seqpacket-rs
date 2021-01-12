@@ -1,3 +1,6 @@
+v0.4.3
+  * Fix compilation for `musl` targets.
+
 v0.4.2
   * Fix links in `README.md`.
 
