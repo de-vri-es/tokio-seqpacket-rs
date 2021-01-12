@@ -46,7 +46,7 @@ jobs:
           args: --all-features --color=always
       - name: Clippy
         uses: actions-rs/clippy-check@v1
-        if: matrix.rust == 'stable'
+        if: matrix.build == 'nightly'
         with:
           toolchain: ${{ matrix.rust }}
           token: ${{ secrets.GITHUB_TOKEN }}
