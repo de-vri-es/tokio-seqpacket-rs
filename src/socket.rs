@@ -117,14 +117,21 @@ impl UnixSeqpacket {
 	///
 	/// If the socket is not ready yet, the current task is scheduled to wake up when the socket becomes writeable.
 	pub fn poll_send(&self, cx: &mut Context, buffer: &[u8]) -> Poll<std::io::Result<usize>> {
-		poll_send(self, cx, buffer)
+		loop {
+			let mut ready_guard = ready!(self.io.poll_write_ready(cx)?);
+
+			match ready_guard.try_io(|inner| inner.get_ref().send(buffer)) {
+				Ok(result) => return Poll::Ready(result),
+				Err(_would_block) => continue,
+			}
+		}
 	}
 
 	/// Try to send data on the socket to the connected peer without blocking.
 	///
 	/// If the socket is not ready yet, the current task is scheduled to wake up when the socket becomes writeable.
 	pub fn poll_send_vectored(&self, cx: &mut Context, buffer: &[IoSlice]) -> Poll<std::io::Result<usize>> {
-		poll_send_vectored(self, cx, buffer)
+		self.poll_send_vectored_with_ancillary(cx, buffer, &mut SocketAncillary::new(&mut []))
 	}
 
 	/// Try to send data with ancillary data on the socket to the connected peer without blocking.
@@ -136,7 +143,13 @@ impl UnixSeqpacket {
 		buffer: &[IoSlice],
 		ancillary: &mut SocketAncillary,
 	) -> Poll<std::io::Result<usize>> {
-		poll_send_vectored_with_ancillary(self, cx, buffer, ancillary)
+		loop {
+			let mut ready_guard = ready!(self.io.poll_write_ready(cx)?);
+			match ready_guard.try_io(|inner| send_msg(inner.get_ref(), buffer, ancillary)) {
+				Ok(result) => return Poll::Ready(result),
+				Err(_would_block) => continue,
+			}
+		}
 	}
 
 	/// Send data on the socket to the connected peer.
@@ -162,14 +175,20 @@ impl UnixSeqpacket {
 	///
 	/// If there is no data ready yet, the current task is scheduled to wake up when the socket becomes readable.
 	pub fn poll_recv(&self, cx: &mut Context, buffer: &mut [u8]) -> Poll<std::io::Result<usize>> {
-		poll_recv(self, cx, buffer)
+		loop {
+			let mut ready_guard = ready!(self.io.poll_read_ready(cx)?);
+			match ready_guard.try_io(|inner| inner.get_ref().recv(buffer)) {
+				Ok(result) => return Poll::Ready(result),
+				Err(_would_block) => continue,
+			}
+		}
 	}
 
 	/// Try to receive data on the socket from the connected peer without blocking.
 	///
 	/// If there is no data ready yet, the current task is scheduled to wake up when the socket becomes readable.
 	pub fn poll_recv_vectored(&self, cx: &mut Context, buffer: &mut [IoSliceMut]) -> Poll<std::io::Result<usize>> {
-		poll_recv_vectored(self, cx, buffer)
+		self.poll_recv_vectored_with_ancillary(cx, buffer, &mut SocketAncillary::new(&mut []))
 	}
 
 	/// Try to receive data with ancillary data on the socket from the connected peer without blocking.
@@ -181,7 +200,14 @@ impl UnixSeqpacket {
 		buffer: &mut [IoSliceMut],
 		ancillary: &mut SocketAncillary,
 	) -> Poll<std::io::Result<usize>> {
-		poll_recv_vectored_with_ancillary(self, cx, buffer, ancillary)
+		loop {
+			let mut ready_guard = ready!(self.io.poll_read_ready(cx)?);
+
+			match ready_guard.try_io(|inner| recv_msg(inner.get_ref(), buffer, ancillary)) {
+				Ok(result) => return Poll::Ready(result),
+				Err(_would_block) => continue,
+			}
+		}
 	}
 
 	/// Receive data on the socket from the connected peer.
@@ -300,79 +326,5 @@ fn check_returned_size(ret: isize) -> std::io::Result<usize> {
 		Err(std::io::Error::last_os_error())
 	} else {
 		Ok(ret as usize)
-	}
-}
-
-/// Send data on the socket to the connected peer without blocking.
-pub(crate) fn poll_send(socket: &UnixSeqpacket, cx: &mut Context, buffer: &[u8]) -> Poll<std::io::Result<usize>> {
-	loop {
-		let mut ready_guard = ready!(socket.io.poll_write_ready(cx)?);
-
-		match ready_guard.try_io(|inner| inner.get_ref().send(buffer)) {
-			Ok(result) => return Poll::Ready(result),
-			Err(_would_block) => continue,
-		}
-	}
-}
-
-/// Send data on the socket to the connected peer without blocking.
-pub(crate) fn poll_send_vectored(
-	socket: &UnixSeqpacket,
-	cx: &mut Context,
-	buffer: &[IoSlice],
-) -> Poll<std::io::Result<usize>> {
-	poll_send_vectored_with_ancillary(socket, cx, buffer, &mut SocketAncillary::new(&mut []))
-}
-
-/// Send data on the socket to the connected peer without blocking.
-pub(crate) fn poll_send_vectored_with_ancillary(
-	socket: &UnixSeqpacket,
-	cx: &mut Context,
-	buffer: &[IoSlice],
-	ancillary: &mut SocketAncillary,
-) -> Poll<std::io::Result<usize>> {
-	loop {
-		let mut ready_guard = ready!(socket.io.poll_write_ready(cx)?);
-		match ready_guard.try_io(|inner| send_msg(inner.get_ref(), buffer, ancillary)) {
-			Ok(result) => return Poll::Ready(result),
-			Err(_would_block) => continue,
-		}
-	}
-}
-
-/// Receive data on the socket from the connected peer without blocking.
-pub(crate) fn poll_recv(socket: &UnixSeqpacket, cx: &mut Context, buffer: &mut [u8]) -> Poll<std::io::Result<usize>> {
-	loop {
-		let mut ready_guard = ready!(socket.io.poll_read_ready(cx)?);
-		match ready_guard.try_io(|inner| inner.get_ref().recv(buffer)) {
-			Ok(result) => return Poll::Ready(result),
-			Err(_would_block) => continue,
-		}
-	}
-}
-
-/// Receive data on the socket from the connected peer without blocking.
-pub(crate) fn poll_recv_vectored(
-	socket: &UnixSeqpacket,
-	cx: &mut Context,
-	buffer: &mut [IoSliceMut],
-) -> Poll<std::io::Result<usize>> {
-	poll_recv_vectored_with_ancillary(socket, cx, buffer, &mut SocketAncillary::new(&mut []))
-}
-
-/// Receive data on the socket from the connected peer without blocking.
-pub(crate) fn poll_recv_vectored_with_ancillary(
-	socket: &UnixSeqpacket,
-	cx: &mut Context,
-	buffer: &mut [IoSliceMut],
-	ancillary: &mut SocketAncillary,
-) -> Poll<std::io::Result<usize>> {
-	loop {
-		let mut ready_guard = ready!(socket.io.poll_read_ready(cx)?);
-
-		match ready_guard.try_io(|inner| recv_msg(inner.get_ref(), buffer, ancillary)) {
-			Ok(result) => return Poll::Ready(result),
-			Err(_would_block) => continue,
-		}
 	}
 }
