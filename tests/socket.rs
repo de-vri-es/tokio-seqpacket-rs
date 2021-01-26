@@ -75,3 +75,41 @@ async fn send_recv_vectored() {
 	assert!(&world == b"world");
 	assert!(&punct == b"!");
 }
+
+#[test]
+fn echo_loop() {
+	let runtime = tokio::runtime::Builder::new_current_thread()
+		.enable_all()
+		.build()
+		.unwrap();
+
+	let (server_result, client_result) = runtime.block_on(async {
+		let_assert!(Ok((client, server)) = UnixSeqpacket::pair());
+
+		let server = tokio::task::spawn(async move {
+			let mut buf = vec![0u8; 2048];
+			loop {
+				println!("waiting for next request");
+				let n_received = server.recv(&mut buf).await.unwrap();
+				println!("recvd: {}", String::from_utf8_lossy(&buf[..n_received]));
+				if n_received == 0 {
+					break;
+				}
+				server.send(&buf[..n_received]).await.unwrap();
+			}
+		});
+		let client = tokio::task::spawn(async move {
+			for i in 0..1024 {
+				let message = format!("Hello #{}", i);
+				let n_sent = client.send(message.as_bytes()).await.unwrap();
+				assert_eq!(n_sent, message.len());
+				let mut buf = vec![0u8; 1024];
+				let n_received = client.recv(&mut buf).await.unwrap();
+				assert_eq!(message.as_bytes(), &buf[..n_received]);
+			}
+		});
+		tokio::join!(server, client)
+	});
+	client_result.expect("client failed");
+	server_result.expect("server failed");
+}
