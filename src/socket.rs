@@ -262,9 +262,12 @@ pub(crate) fn poll_send(socket: &UnixSeqpacket, cx: &mut Context, buffer: &[u8])
 	loop {
 		let mut ready_guard = ready!(socket.io.poll_write_ready(cx)?);
 
-		match ready_guard.try_io(|inner| inner.get_ref().send(buffer)) {
-			Ok(result) => return Poll::Ready(result),
-			Err(_would_block) => continue,
+		match socket.io.get_ref().send(buffer) {
+			Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+				ready_guard.clear_ready();
+				continue;
+			},
+			x => return Poll::Ready(x),
 		}
 	}
 }
@@ -283,9 +286,13 @@ pub(crate) fn poll_send_vectored_with_ancillary(
 ) -> Poll<std::io::Result<usize>> {
 	loop {
 		let mut ready_guard = ready!(socket.io.poll_write_ready(cx)?);
-		match ready_guard.try_io(|inner| send_msg(inner.get_ref(), buffer, ancillary)) {
-			Ok(result) => return Poll::Ready(result),
-			Err(_would_block) => continue,
+
+		match send_msg(socket.io.get_ref(), buffer, ancillary) {
+			Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+				ready_guard.clear_ready();
+				continue;
+			},
+			x => return Poll::Ready(x),
 		}
 	}
 }
@@ -294,9 +301,13 @@ pub(crate) fn poll_send_vectored_with_ancillary(
 pub(crate) fn poll_recv(socket: &UnixSeqpacket, cx: &mut Context, buffer: &mut [u8]) -> Poll<std::io::Result<usize>> {
 	loop {
 		let mut ready_guard = ready!(socket.io.poll_read_ready(cx)?);
-		match ready_guard.try_io(|inner| inner.get_ref().recv(buffer)) {
-			Ok(result) => return Poll::Ready(result),
-			Err(_would_block) => continue,
+
+		match socket.io.get_ref().recv(buffer) {
+			Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+				ready_guard.clear_ready();
+				continue;
+			},
+			x => return Poll::Ready(x),
 		}
 	}
 }
@@ -316,9 +327,12 @@ pub(crate) fn poll_recv_vectored_with_ancillary(
 	loop {
 		let mut ready_guard = ready!(socket.io.poll_read_ready(cx)?);
 
-		match ready_guard.try_io(|inner| recv_msg(inner.get_ref(), buffer, ancillary)) {
-			Ok(result) => return Poll::Ready(result),
-			Err(_would_block) => continue,
+		match recv_msg(socket.io.get_ref(), buffer, ancillary) {
+			Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+				ready_guard.clear_ready();
+				continue;
+			},
+			x => return Poll::Ready(x),
 		}
 	}
 }
