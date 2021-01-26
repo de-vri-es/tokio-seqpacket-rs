@@ -1,3 +1,6 @@
+v0.4.4
+  * Fix potential hangs in I/O functions.
+
 v0.4.3
   * Fix compilation for `musl` targets.
   * Add conversions to/from raw file descriptors.
