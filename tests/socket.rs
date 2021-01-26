@@ -84,7 +84,7 @@ fn echo_loop() {
 		.unwrap();
 
 	let (server_result, client_result) = runtime.block_on(async {
-		let_assert!(Ok((client, server)) = UnixSeqpacket::pair());
+		let_assert!(Ok((mut client, mut server)) = UnixSeqpacket::pair());
 
 		let server = tokio::task::spawn(async move {
 			let mut buf = vec![0u8; 2048];
