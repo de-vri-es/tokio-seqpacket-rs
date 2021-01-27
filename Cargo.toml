@@ -1,6 +1,6 @@
 [package]
 name = "tokio-seqpacket"
-version = "0.4.4"
+version = "0.4.5"
 license = "BSD-2-Clause"
 authors = [
 	"Maarten de Vries <maarten@de-vri.es>",
