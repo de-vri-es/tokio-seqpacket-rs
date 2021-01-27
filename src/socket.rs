@@ -1,7 +1,7 @@
 use std::convert::TryInto;
 use std::io::{IoSlice, IoSliceMut};
 use std::os::unix::io::{AsRawFd, IntoRawFd};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::task::{Context, Poll};
 use tokio::io::unix::AsyncFd;
 
@@ -9,6 +9,10 @@ use crate::ancillary::SocketAncillary;
 use crate::UCred;
 
 /// Unix seqpacket socket.
+///
+/// Note that there are no functions to get the local or remote address of the connection.
+/// That is because connected Unix sockets are always anonymous,
+/// which means that the address contains no useful information.
 pub struct UnixSeqpacket {
 	io: AsyncFd<socket2::Socket>,
 }
@@ -81,18 +85,6 @@ impl UnixSeqpacket {
 	)]
 	pub fn split(&self) -> (&Self, &Self) {
 		(self, self)
-	}
-
-	/// Get the socket address of the local half of this connection.
-	pub fn local_addr(&self) -> std::io::Result<PathBuf> {
-		let addr = self.io.get_ref().local_addr()?;
-		Ok(crate::address_path(&addr)?.into())
-	}
-
-	/// Get the socket address of the remote half of this connection.
-	pub fn peer_addr(&self) -> std::io::Result<PathBuf> {
-		let addr = self.io.get_ref().peer_addr()?;
-		Ok(crate::address_path(&addr)?.into())
 	}
 
 	/// Get the effective credentials of the process which called `connect` or `pair`.

@@ -1,5 +1,6 @@
 v0.5.0
   * Report socket address as `PathBuf`.
+  * Remove `UnixSeqpacket::local/remote_addr`, as they never contain useful information.
 
 v0.4.5
   * Properly allow multiple tasks to call async function on the same socket (poll functions still only wake the last task).
