@@ -31,15 +31,11 @@ impl UnixSeqpacket {
 	pub async fn connect<P: AsRef<Path>>(address: P) -> std::io::Result<Self> {
 		let address = socket2::SockAddr::unix(address)?;
 		let socket = socket2::Socket::new(socket2::Domain::unix(), crate::socket_type(), None)?;
-		#[allow(clippy::single_match)]
-		match socket.connect(&address) {
-			Err(e) => {
-				if e.kind() != std::io::ErrorKind::WouldBlock {
-					return Err(e);
-				}
-			},
-			_ => (),
-		};
+		if let Err(e) = socket.connect(&address) {
+			if e.kind() != std::io::ErrorKind::WouldBlock {
+				return Err(e);
+			}
+		}
 
 		let socket = Self::new(socket)?;
 		socket.io.writable().await?.retain_ready();
