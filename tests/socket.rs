@@ -113,3 +113,65 @@ fn echo_loop() {
 	client_result.expect("client failed");
 	server_result.expect("server failed");
 }
+
+#[test]
+fn multiple_waiters() {
+	use std::sync::Arc;
+	use std::sync::atomic::{AtomicUsize, Ordering};
+
+	let runtime = tokio::runtime::Builder::new_current_thread()
+		.enable_all()
+		.build()
+		.unwrap();
+
+	runtime.block_on(async {
+		let_assert!(Ok((a, b)) = UnixSeqpacket::pair());
+		let a = Arc::new(a);
+		let b = Arc::new(b);
+		let written = Arc::new(AtomicUsize::new(0));
+		let received = Arc::new(AtomicUsize::new(0));
+
+		let read1 = tokio::spawn({
+			let a = a.clone();
+			let written = written.clone();
+			let received = received.clone();
+			async move {
+				let mut buffer = [0u8; 12];
+				assert!(written.load(Ordering::Relaxed) == 0); // Double check that the test will cause recv() to park the current task.
+				assert!(let Ok(12) = a.recv(&mut buffer).await);
+				assert!(&buffer == b"Hello world!");
+				received.fetch_add(1, Ordering::Relaxed);
+			}
+		});
+
+		let read2 = tokio::spawn({
+			let a = a.clone();
+			let written = written.clone();
+			let received = received.clone();
+			async move {
+				let mut buffer = [0u8; 12];
+				assert!(written.load(Ordering::Relaxed) == 0); // Double check that the test will cause recv() to park the current task.
+				assert!(let Ok(12) = a.recv(&mut buffer).await);
+				assert!(&buffer == b"Hello world!");
+				received.fetch_add(1, Ordering::Relaxed);
+			}
+		});
+
+		let write = tokio::spawn(async move {
+			// Give the readers some time to get parked.
+			for _ in 0..10 {
+				tokio::task::yield_now().await;
+			}
+			written.fetch_add(1, Ordering::Relaxed);
+			assert!(let Ok(12) = b.send(b"Hello world!").await);
+			written.fetch_add(1, Ordering::Relaxed);
+			assert!(let Ok(12) = b.send(b"Hello world!").await);
+		});
+
+		let (read1, read2, write) = tokio::join!(read1, read2, write);
+		assert!(let Ok(()) = read1);
+		assert!(let Ok(()) = read2);
+		assert!(let Ok(()) = write);
+		assert!(received.load(Ordering::Relaxed) == 2);
+	});
+}
