@@ -60,18 +60,13 @@ impl UnixSeqpacketListener {
 
 	/// Check if there is a connection ready to accept.
 	pub fn poll_accept(&mut self, cx: &mut Context) -> Poll<std::io::Result<(UnixSeqpacket, SocketAddr)>> {
-		let mut ready_guard = ready!(self.io.poll_read_ready(cx)?);
+		let (socket, addr) = loop {
+			let mut ready_guard = ready!(self.io.poll_read_ready(cx)?);
 
-		let (socket, addr) = match self.io.get_ref().accept() {
-			Ok(x) => x,
-			Err(e) => {
-				if e.kind() == std::io::ErrorKind::WouldBlock {
-					ready_guard.clear_ready();
-					return Poll::Pending;
-				} else {
-					return Poll::Ready(Err(e));
-				}
-			},
+			match ready_guard.try_io(|inner| inner.get_ref().accept()) {
+				Ok(x) => break x?,
+				Err(_would_block) => continue,
+			}
 		};
 
 		socket.set_nonblocking(true)?;
