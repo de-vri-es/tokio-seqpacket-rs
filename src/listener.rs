@@ -1,6 +1,5 @@
 use std::os::unix::io::AsRawFd;
-use std::os::unix::net::SocketAddr;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::task::{Context, Poll};
 use tokio::io::unix::AsyncFd;
 
@@ -47,9 +46,9 @@ impl UnixSeqpacketListener {
 	}
 
 	/// Get the socket address of the local half of this connection.
-	pub fn local_addr(&self) -> std::io::Result<SocketAddr> {
+	pub fn local_addr(&self) -> std::io::Result<PathBuf> {
 		let addr = self.io.get_ref().local_addr()?;
-		Ok(crate::sockaddr_as_unix(&addr).unwrap())
+		Ok(crate::address_path(&addr)?.into())
 	}
 
 	/// Get the value of the `SO_ERROR` option.
@@ -61,8 +60,11 @@ impl UnixSeqpacketListener {
 	///
 	/// Note that unlike [`Self::accept`], only the last task calling this function will be woken up.
 	/// For that reason, it is preferable to use the async functions rather than polling functions when possible.
-	pub fn poll_accept(&mut self, cx: &mut Context) -> Poll<std::io::Result<(UnixSeqpacket, SocketAddr)>> {
-		let (socket, addr) = loop {
+	///
+	/// Note that this function does not return a remote address for the accepted connection.
+	/// This is because connected Unix sockets are anonymous and have no meaningful address.
+	pub fn poll_accept(&mut self, cx: &mut Context) -> Poll<std::io::Result<UnixSeqpacket>> {
+		let (socket, _addr) = loop {
 			let mut ready_guard = ready!(self.io.poll_read_ready(cx)?);
 
 			match ready_guard.try_io(|inner| inner.get_ref().accept()) {
@@ -72,16 +74,18 @@ impl UnixSeqpacketListener {
 		};
 
 		socket.set_nonblocking(true)?;
-		let addr = crate::sockaddr_as_unix(&addr).unwrap();
-		Poll::Ready(Ok((UnixSeqpacket::new(socket)?, addr)))
+		Poll::Ready(Ok(UnixSeqpacket::new(socket)?))
 	}
 
 	/// Accept a new incoming connection on the listener.
 	///
 	/// This function is safe to call concurrently from different tasks.
 	/// Although no order is guaranteed, all calling tasks will try to complete the asynchronous action.
-	pub async fn accept(&mut self) -> std::io::Result<(UnixSeqpacket, SocketAddr)> {
-		let (socket, addr) = loop {
+	///
+	/// Note that this function does not return a remote address for the accepted connection.
+	/// This is because connected Unix sockets are anonymous and have no meaningful address.
+	pub async fn accept(&mut self) -> std::io::Result<UnixSeqpacket> {
+		let (socket, _addr) = loop {
 			let mut ready_guard = self.io.readable().await?;
 
 			match ready_guard.try_io(|inner| inner.get_ref().accept()) {
@@ -91,7 +95,6 @@ impl UnixSeqpacketListener {
 		};
 
 		socket.set_nonblocking(true)?;
-		let addr = crate::sockaddr_as_unix(&addr).unwrap();
-		Ok((UnixSeqpacket::new(socket)?, addr))
+		Ok(UnixSeqpacket::new(socket)?)
 	}
 }

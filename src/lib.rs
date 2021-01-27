@@ -80,23 +80,29 @@ fn socket_type() -> socket2::Type {
 	socket2::Type::seqpacket().cloexec().non_blocking()
 }
 
-/// Convert a [`socket2::SockAddr`] to a [`std::os::unix::net::SocketAddr`].
-fn sockaddr_as_unix(addr: &socket2::SockAddr) -> Option<std::os::unix::net::SocketAddr> {
-	if addr.family() != libc::AF_LOCAL as libc::sa_family_t {
-		return None;
-	}
+/// Get the Unix path of a socket address.
+///
+/// An error is retuend if the address is not a Unix address, or if it is an unnamed or abstract.
+fn address_path(address: &socket2::SockAddr) -> std::io::Result<&std::path::Path> {
+	use std::ffi::OsStr;
+	use std::os::unix::ffi::OsStrExt;
+	use std::path::Path;
 
-	#[allow(dead_code)]
-	struct SocketAddrInternal {
-		addr: libc::sockaddr_un,
-		len: libc::socklen_t,
-	}
+	if address.family() != libc::AF_LOCAL as _ {
+		Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("address family is not AF_LOCAL/UNIX: {}", address.family())))
+	} else {
+		let len = address.len() as usize;
+		let address = address.as_ptr() as *const libc::sockaddr_un;
+		let path_start = unsafe { &(*address).sun_path }.as_ptr().cast::<u8>();
+		let path_len = len - unsafe { path_start.offset_from(address.cast::<u8>()) } as usize;
+		let path = unsafe { std::slice::from_raw_parts(path_start, path_len) };
 
-	unsafe {
-		let internal = SocketAddrInternal {
-			addr: std::ptr::read(addr.as_ptr() as *const libc::sockaddr_un),
-			len: addr.len(),
+		// Some platforms include a trailing null byte in the path length.
+		let path = if path.last() == Some(&0) {
+			&path[..path.len() - 1]
+		} else {
+			path
 		};
-		Some(std::mem::transmute(internal))
+		Ok(Path::new(OsStr::from_bytes(path)))
 	}
 }

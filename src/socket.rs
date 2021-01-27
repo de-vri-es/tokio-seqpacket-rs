@@ -1,7 +1,7 @@
 use std::convert::TryInto;
 use std::io::{IoSlice, IoSliceMut};
 use std::os::unix::io::{AsRawFd, IntoRawFd};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::task::{Context, Poll};
 use tokio::io::unix::AsyncFd;
 
@@ -84,15 +84,15 @@ impl UnixSeqpacket {
 	}
 
 	/// Get the socket address of the local half of this connection.
-	pub fn local_addr(&self) -> std::io::Result<std::os::unix::net::SocketAddr> {
+	pub fn local_addr(&self) -> std::io::Result<PathBuf> {
 		let addr = self.io.get_ref().local_addr()?;
-		Ok(crate::sockaddr_as_unix(&addr).unwrap())
+		Ok(crate::address_path(&addr)?.into())
 	}
 
 	/// Get the socket address of the remote half of this connection.
-	pub fn peer_addr(&self) -> std::io::Result<std::os::unix::net::SocketAddr> {
+	pub fn peer_addr(&self) -> std::io::Result<PathBuf> {
 		let addr = self.io.get_ref().peer_addr()?;
-		Ok(crate::sockaddr_as_unix(&addr).unwrap())
+		Ok(crate::address_path(&addr)?.into())
 	}
 
 	/// Get the effective credentials of the process which called `connect` or `pair`.
