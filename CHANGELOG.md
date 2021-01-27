@@ -1,3 +1,7 @@
+v0.4.5
+  * Properly allow multiple tasks to call async function on the same socket (poll functions still only wake the last task).
+  * Fix potential hang in `UnixSeqpacketListener::accept()`.
+
 v0.4.4
   * Fix potential hangs in I/O functions.
 
