@@ -1,4 +1,3 @@
-use futures::future::poll_fn;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::net::SocketAddr;
 use std::path::Path;
@@ -59,6 +58,9 @@ impl UnixSeqpacketListener {
 	}
 
 	/// Check if there is a connection ready to accept.
+	///
+	/// Note that unlike [`Self::accept`], only the last task calling this function will be woken up.
+	/// For that reason, it is preferable to use the async functions rather than polling functions when possible.
 	pub fn poll_accept(&mut self, cx: &mut Context) -> Poll<std::io::Result<(UnixSeqpacket, SocketAddr)>> {
 		let (socket, addr) = loop {
 			let mut ready_guard = ready!(self.io.poll_read_ready(cx)?);
@@ -75,7 +77,21 @@ impl UnixSeqpacketListener {
 	}
 
 	/// Accept a new incoming connection on the listener.
+	///
+	/// This function is safe to call concurrently from different tasks.
+	/// Although no order is guaranteed, all calling tasks will try to complete the asynchronous action.
 	pub async fn accept(&mut self) -> std::io::Result<(UnixSeqpacket, SocketAddr)> {
-		poll_fn(|cx| self.poll_accept(cx)).await
+		let (socket, addr) = loop {
+			let mut ready_guard = self.io.readable().await?;
+
+			match ready_guard.try_io(|inner| inner.get_ref().accept()) {
+				Ok(x) => break x?,
+				Err(_would_block) => continue,
+			}
+		};
+
+		socket.set_nonblocking(true)?;
+		let addr = crate::sockaddr_as_unix(&addr).unwrap();
+		Ok((UnixSeqpacket::new(socket)?, addr))
 	}
 }

@@ -1,4 +1,3 @@
-use futures::future::poll_fn;
 use std::convert::TryInto;
 use std::io::{IoSlice, IoSliceMut};
 use std::os::unix::io::{AsRawFd, IntoRawFd};
@@ -116,6 +115,9 @@ impl UnixSeqpacket {
 	/// Try to send data on the socket to the connected peer without blocking.
 	///
 	/// If the socket is not ready yet, the current task is scheduled to wake up when the socket becomes writeable.
+	///
+	/// Note that unlike [`Self::send`], only the last task calling this function will be woken up.
+	/// For that reason, it is preferable to use the async functions rather than polling functions when possible.
 	pub fn poll_send(&self, cx: &mut Context, buffer: &[u8]) -> Poll<std::io::Result<usize>> {
 		loop {
 			let mut ready_guard = ready!(self.io.poll_write_ready(cx)?);
@@ -130,6 +132,9 @@ impl UnixSeqpacket {
 	/// Try to send data on the socket to the connected peer without blocking.
 	///
 	/// If the socket is not ready yet, the current task is scheduled to wake up when the socket becomes writeable.
+	///
+	/// Note that unlike [`Self::send_vectored`], only the last task calling this function will be woken up.
+	/// For that reason, it is preferable to use the async functions rather than polling functions when possible.
 	pub fn poll_send_vectored(&self, cx: &mut Context, buffer: &[IoSlice]) -> Poll<std::io::Result<usize>> {
 		self.poll_send_vectored_with_ancillary(cx, buffer, &mut SocketAncillary::new(&mut []))
 	}
@@ -137,6 +142,9 @@ impl UnixSeqpacket {
 	/// Try to send data with ancillary data on the socket to the connected peer without blocking.
 	///
 	/// If the socket is not ready yet, the current task is scheduled to wake up when the socket becomes writeable.
+	///
+	/// Note that unlike [`Self::send_vectored_with_ancillary`], only the last task calling this function will be woken up.
+	/// For that reason, it is preferable to use the async functions rather than polling functions when possible.
 	pub fn poll_send_vectored_with_ancillary(
 		&self,
 		cx: &mut Context,
@@ -153,27 +161,52 @@ impl UnixSeqpacket {
 	}
 
 	/// Send data on the socket to the connected peer.
+	///
+	/// This function is safe to call concurrently from different tasks.
+	/// Although no order is guaranteed, all calling tasks will try to complete the asynchronous action.
 	pub async fn send(&self, buffer: &[u8]) -> std::io::Result<usize> {
-		poll_fn(|cx| self.poll_send(cx, buffer)).await
+		loop {
+			let mut ready_guard = self.io.writable().await?;
+
+			match ready_guard.try_io(|inner| inner.get_ref().send(buffer)) {
+				Ok(result) => return result,
+				Err(_would_block) => continue,
+			}
+		}
 	}
 
 	/// Send data on the socket to the connected peer.
+	///
+	/// This function is safe to call concurrently from different tasks.
+	/// Although no order is guaranteed, all calling tasks will try to complete the asynchronous action.
 	pub async fn send_vectored(&self, buffer: &[IoSlice<'_>]) -> std::io::Result<usize> {
-		poll_fn(|cx| self.poll_send_vectored(cx, buffer)).await
+		self.send_vectored_with_ancillary(buffer, &mut SocketAncillary::new(&mut [])).await
 	}
 
 	/// Send data with ancillary data on the socket to the connected peer.
+	///
+	/// This function is safe to call concurrently from different tasks.
+	/// Although no order is guaranteed, all calling tasks will try to complete the asynchronous action.
 	pub async fn send_vectored_with_ancillary(
 		&self,
 		buffer: &[IoSlice<'_>],
 		ancillary: &mut SocketAncillary<'_>,
 	) -> std::io::Result<usize> {
-		poll_fn(|cx| self.poll_send_vectored_with_ancillary(cx, buffer, ancillary)).await
+		loop {
+			let mut ready_guard = self.io.writable().await?;
+			match ready_guard.try_io(|inner| send_msg(inner.get_ref(), buffer, ancillary)) {
+				Ok(result) => return result,
+				Err(_would_block) => continue,
+			}
+		}
 	}
 
 	/// Try to receive data on the socket from the connected peer without blocking.
 	///
 	/// If there is no data ready yet, the current task is scheduled to wake up when the socket becomes readable.
+	///
+	/// Note that unlike [`Self::recv`], only the last task calling this function will be woken up.
+	/// For that reason, it is preferable to use the async functions rather than polling functions when possible.
 	pub fn poll_recv(&self, cx: &mut Context, buffer: &mut [u8]) -> Poll<std::io::Result<usize>> {
 		loop {
 			let mut ready_guard = ready!(self.io.poll_read_ready(cx)?);
@@ -187,6 +220,9 @@ impl UnixSeqpacket {
 	/// Try to receive data on the socket from the connected peer without blocking.
 	///
 	/// If there is no data ready yet, the current task is scheduled to wake up when the socket becomes readable.
+	///
+	/// Note that unlike [`Self::recv_vectored`], only the last task calling this function will be woken up.
+	/// For that reason, it is preferable to use the async functions rather than polling functions when possible.
 	pub fn poll_recv_vectored(&self, cx: &mut Context, buffer: &mut [IoSliceMut]) -> Poll<std::io::Result<usize>> {
 		self.poll_recv_vectored_with_ancillary(cx, buffer, &mut SocketAncillary::new(&mut []))
 	}
@@ -194,6 +230,9 @@ impl UnixSeqpacket {
 	/// Try to receive data with ancillary data on the socket from the connected peer without blocking.
 	///
 	/// If there is no data ready yet, the current task is scheduled to wake up when the socket becomes readable.
+	///
+	/// Note that unlike [`Self::recv_vectored_with_ancillary`], only the last task calling this function will be woken up.
+	/// For that reason, it is preferable to use the async functions rather than polling functions when possible.
 	pub fn poll_recv_vectored_with_ancillary(
 		&self,
 		cx: &mut Context,
@@ -211,22 +250,45 @@ impl UnixSeqpacket {
 	}
 
 	/// Receive data on the socket from the connected peer.
+	///
+	/// This function is safe to call concurrently from different tasks.
+	/// Although no order is guaranteed, all calling tasks will try to complete the asynchronous action.
 	pub async fn recv(&self, buffer: &mut [u8]) -> std::io::Result<usize> {
-		poll_fn(|cx| self.poll_recv(cx, buffer)).await
+		loop {
+			let mut ready_guard = self.io.readable().await?;
+
+			match ready_guard.try_io(|inner| inner.get_ref().recv(buffer)) {
+				Ok(result) => return result,
+				Err(_would_block) => continue,
+			}
+		}
 	}
 
 	/// Receive data on the socket from the connected peer.
+	///
+	/// This function is safe to call concurrently from different tasks.
+	/// Although no order is guaranteed, all calling tasks will try to complete the asynchronous action.
 	pub async fn recv_vectored(&self, buffer: &mut [IoSliceMut<'_>]) -> std::io::Result<usize> {
-		poll_fn(|cx| self.poll_recv_vectored(cx, buffer)).await
+		self.recv_vectored_with_ancillary(buffer, &mut SocketAncillary::new(&mut [])).await
 	}
 
 	/// Receive data with ancillary data on the socket from the connected peer.
+	///
+	/// This function is safe to call concurrently from different tasks.
+	/// Although no order is guaranteed, all calling tasks will try to complete the asynchronous action.
 	pub async fn recv_vectored_with_ancillary(
 		&self,
 		buffer: &mut [IoSliceMut<'_>],
 		ancillary: &mut SocketAncillary<'_>,
 	) -> std::io::Result<usize> {
-		poll_fn(|cx| self.poll_recv_vectored_with_ancillary(cx, buffer, ancillary)).await
+		loop {
+			let mut ready_guard = self.io.readable().await?;
+
+			match ready_guard.try_io(|inner| recv_msg(inner.get_ref(), buffer, ancillary)) {
+				Ok(result) => return result,
+				Err(_would_block) => continue,
+			}
+		}
 	}
 
 	/// Shuts down the read, write, or both halves of this connection.
