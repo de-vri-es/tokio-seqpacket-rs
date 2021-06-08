@@ -76,8 +76,7 @@ pub type ReadHalf<'a> = &'a UnixSeqpacket;
 pub type WriteHalf<'a> = &'a UnixSeqpacket;
 
 /// The socket type for a close-on-exec non-blocking seqpacket socket.
-const SOCKET_TYPE: socket2::Type =
-	socket2::Type::SEQPACKET.cloexec().nonblocking();
+const SOCKET_TYPE: socket2::Type = socket2::Type::SEQPACKET.cloexec().nonblocking();
 
 /// Get the Unix path of a socket address.
 ///
@@ -88,7 +87,10 @@ fn address_path(address: &socket2::SockAddr) -> std::io::Result<&std::path::Path
 	use std::path::Path;
 
 	if address.family() != libc::AF_LOCAL as _ {
-		Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("address family is not AF_LOCAL/UNIX: {}", address.family())))
+		Err(std::io::Error::new(
+			std::io::ErrorKind::InvalidData,
+			format!("address family is not AF_LOCAL/UNIX: {}", address.family()),
+		))
 	} else {
 		let len = address.len() as usize;
 		let address = address.as_ptr() as *const libc::sockaddr_un;

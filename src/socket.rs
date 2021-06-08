@@ -168,7 +168,8 @@ impl UnixSeqpacket {
 	/// This function is safe to call concurrently from different tasks.
 	/// Although no order is guaranteed, all calling tasks will try to complete the asynchronous action.
 	pub async fn send_vectored(&self, buffer: &[IoSlice<'_>]) -> std::io::Result<usize> {
-		self.send_vectored_with_ancillary(buffer, &mut SocketAncillary::new(&mut [])).await
+		self.send_vectored_with_ancillary(buffer, &mut SocketAncillary::new(&mut []))
+			.await
 	}
 
 	/// Send data with ancillary data on the socket to the connected peer.
@@ -257,7 +258,8 @@ impl UnixSeqpacket {
 	/// This function is safe to call concurrently from different tasks.
 	/// Although no order is guaranteed, all calling tasks will try to complete the asynchronous action.
 	pub async fn recv_vectored(&self, buffer: &mut [IoSliceMut<'_>]) -> std::io::Result<usize> {
-		self.recv_vectored_with_ancillary(buffer, &mut SocketAncillary::new(&mut [])).await
+		self.recv_vectored_with_ancillary(buffer, &mut SocketAncillary::new(&mut []))
+			.await
 	}
 
 	/// Receive data with ancillary data on the socket from the connected peer.
@@ -320,15 +322,16 @@ fn send_msg(socket: &socket2::Socket, buffer: &[IoSlice], ancillary: &mut Socket
 	// This is not a no-op on all platforms.
 	#[allow(clippy::useless_conversion)]
 	{
-		header.msg_iovlen = buffer.len().try_into()
-			.map_err(|_| std::io::ErrorKind::InvalidInput)?;
+		header.msg_iovlen = buffer.len().try_into().map_err(|_| std::io::ErrorKind::InvalidInput)?;
 	}
 	header.msg_flags = 0;
 	header.msg_control = control_data;
 	// This is not a no-op on all platforms.
 	#[allow(clippy::useless_conversion)]
 	{
-		header.msg_controllen = ancillary.len().try_into()
+		header.msg_controllen = ancillary
+			.len()
+			.try_into()
 			.map_err(|_| std::io::ErrorKind::InvalidInput)?;
 	}
 
@@ -353,15 +356,16 @@ fn recv_msg(
 	// This is not a no-op on all platforms.
 	#[allow(clippy::useless_conversion)]
 	{
-		header.msg_iovlen = buffer.len().try_into()
-			.map_err(|_| std::io::ErrorKind::InvalidInput)?;
+		header.msg_iovlen = buffer.len().try_into().map_err(|_| std::io::ErrorKind::InvalidInput)?;
 	}
 	header.msg_flags = 0;
 	header.msg_control = control_data;
 	// This is not a no-op on all platforms.
 	#[allow(clippy::useless_conversion)]
 	{
-		header.msg_controllen = ancillary.capacity().try_into()
+		header.msg_controllen = ancillary
+			.capacity()
+			.try_into()
 			.map_err(|_| std::io::ErrorKind::InvalidInput)?;
 	}
 

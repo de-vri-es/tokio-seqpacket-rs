@@ -117,8 +117,8 @@ fn echo_loop() {
 
 #[test]
 fn multiple_waiters() {
-	use std::sync::Arc;
 	use std::sync::atomic::{AtomicUsize, Ordering};
+	use std::sync::Arc;
 
 	let runtime = tokio::runtime::Builder::new_current_thread()
 		.enable_all()
