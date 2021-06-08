@@ -1,3 +1,6 @@
+v0.5.1
+  * Upgrade to socket2 0.4.
+
 v0.5.0
   * Report socket address as `PathBuf`.
   * Remove `UnixSeqpacket::local/remote_addr`, as they never contain useful information.
