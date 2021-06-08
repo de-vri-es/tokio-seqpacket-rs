@@ -39,7 +39,7 @@ impl UnixSeqpacketListener {
 	/// See `man 3 listen` for more information.
 	pub fn bind_with_backlog<P: AsRef<Path>>(address: P, backlog: std::os::raw::c_int) -> std::io::Result<Self> {
 		let address = socket2::SockAddr::unix(address)?;
-		let socket = socket2::Socket::new(socket2::Domain::unix(), crate::socket_type(), None)?;
+		let socket = socket2::Socket::new(socket2::Domain::UNIX, crate::SOCKET_TYPE, None)?;
 		socket.bind(&address)?;
 		socket.listen(backlog)?;
 		Self::new(socket)
