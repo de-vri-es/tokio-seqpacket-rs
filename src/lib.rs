@@ -75,10 +75,9 @@ pub type ReadHalf<'a> = &'a UnixSeqpacket;
 )]
 pub type WriteHalf<'a> = &'a UnixSeqpacket;
 
-/// Get the socket type for a close-on-exec non-blocking seqpacket socket.
-fn socket_type() -> socket2::Type {
-	socket2::Type::seqpacket().cloexec().non_blocking()
-}
+/// The socket type for a close-on-exec non-blocking seqpacket socket.
+const SOCKET_TYPE: socket2::Type =
+	socket2::Type::SEQPACKET.cloexec().nonblocking();
 
 /// Get the Unix path of a socket address.
 ///

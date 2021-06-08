@@ -1,5 +1,5 @@
 use std::convert::TryInto;
-use std::io::{IoSlice, IoSliceMut};
+use std::io::{IoSlice, IoSliceMut, Read};
 use std::os::unix::io::{AsRawFd, IntoRawFd};
 use std::path::Path;
 use std::task::{Context, Poll};
@@ -34,7 +34,7 @@ impl UnixSeqpacket {
 	/// Connect a new seqpacket socket to the given address.
 	pub async fn connect<P: AsRef<Path>>(address: P) -> std::io::Result<Self> {
 		let address = socket2::SockAddr::unix(address)?;
-		let socket = socket2::Socket::new(socket2::Domain::unix(), crate::socket_type(), None)?;
+		let socket = socket2::Socket::new(socket2::Domain::UNIX, crate::SOCKET_TYPE, None)?;
 		if let Err(e) = socket.connect(&address) {
 			if e.kind() != std::io::ErrorKind::WouldBlock {
 				return Err(e);
@@ -48,7 +48,7 @@ impl UnixSeqpacket {
 
 	/// Create a pair of connected seqpacket sockets.
 	pub fn pair() -> std::io::Result<(Self, Self)> {
-		let (a, b) = socket2::Socket::pair(socket2::Domain::unix(), crate::socket_type(), None)?;
+		let (a, b) = socket2::Socket::pair(socket2::Domain::UNIX, crate::SOCKET_TYPE, None)?;
 		let a = Self::new(a)?;
 		let b = Self::new(b)?;
 		Ok((a, b))
@@ -198,7 +198,7 @@ impl UnixSeqpacket {
 	pub fn poll_recv(&self, cx: &mut Context, buffer: &mut [u8]) -> Poll<std::io::Result<usize>> {
 		loop {
 			let mut ready_guard = ready!(self.io.poll_read_ready(cx)?);
-			match ready_guard.try_io(|inner| inner.get_ref().recv(buffer)) {
+			match ready_guard.try_io(|inner| inner.get_ref().read(buffer)) {
 				Ok(result) => return Poll::Ready(result),
 				Err(_would_block) => continue,
 			}
@@ -245,7 +245,7 @@ impl UnixSeqpacket {
 		loop {
 			let mut ready_guard = self.io.readable().await?;
 
-			match ready_guard.try_io(|inner| inner.get_ref().recv(buffer)) {
+			match ready_guard.try_io(|inner| inner.get_ref().read(buffer)) {
 				Ok(result) => return result,
 				Err(_would_block) => continue,
 			}

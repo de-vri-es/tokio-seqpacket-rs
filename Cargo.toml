@@ -16,7 +16,7 @@ edition = "2018"
 
 [dependencies]
 libc = "0.2.77"
-socket2 = { version = "0.3.15", features = ["unix", "pair"] }
+socket2 = { version = "0.4", features = ["all"] }
 tokio = { version = "1.0", features = ["net"] }
 
 [dev-dependencies]

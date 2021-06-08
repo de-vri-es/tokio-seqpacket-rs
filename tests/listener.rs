@@ -8,13 +8,13 @@ fn unix_seqpacket_listener() {
 	let dir = tempdir().unwrap();
 	let path = dir.path().join("listener.sock");
 
-	let mut runtime = tokio::runtime::Builder::new_current_thread()
+	let runtime = tokio::runtime::Builder::new_current_thread()
 		.enable_all()
 		.build()
 		.unwrap();
 	let local = tokio::task::LocalSet::new();
 
-	local.block_on(&mut runtime, async move {
+	local.block_on(&runtime, async move {
 		let server_task = tokio::task::spawn_local({
 			let_assert!(Ok(mut listener) = UnixSeqpacketListener::bind(&path));
 			let_assert!(Ok(local_address) = listener.local_addr());
