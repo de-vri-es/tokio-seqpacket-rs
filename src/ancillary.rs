@@ -14,19 +14,6 @@ use std::os::unix::io::RawFd;
 #[cfg(any(target_os = "android", target_os = "linux",))]
 use libc::{gid_t, pid_t, uid_t};
 
-#[cfg(any(target_os = "android", all(target_os = "linux", target_env = "gnu")))]
-pub(crate) type CmsgLen = usize;
-
-#[cfg(any(
-	target_os = "dragonfly",
-	target_os = "emscripten",
-	target_os = "freebsd",
-	all(target_os = "linux", target_env = "musl",),
-	target_os = "netbsd",
-	target_os = "openbsd",
-))]
-pub(crate) type CmsgLen = libc::socklen_t;
-
 fn add_to_ancillary_data<T>(
 	buffer: &mut [u8],
 	length: &mut usize,
@@ -65,7 +52,7 @@ fn add_to_ancillary_data<T>(
 
 		let mut msg: libc::msghdr = zeroed();
 		msg.msg_control = buffer.as_mut_ptr().cast();
-		msg.msg_controllen = *length as CmsgLen;
+		msg.msg_controllen = *length as _;
 
 		let mut cmsg = libc::CMSG_FIRSTHDR(&msg);
 		let mut previous_cmsg = cmsg;
@@ -80,7 +67,7 @@ fn add_to_ancillary_data<T>(
 
 		(*previous_cmsg).cmsg_level = cmsg_level;
 		(*previous_cmsg).cmsg_type = cmsg_type;
-		(*previous_cmsg).cmsg_len = libc::CMSG_LEN(source_len) as CmsgLen;
+		(*previous_cmsg).cmsg_len = libc::CMSG_LEN(source_len) as _;
 
 		let data = libc::CMSG_DATA(previous_cmsg).cast();
 
@@ -252,10 +239,10 @@ impl<'a> AncillaryData<'a> {
 
 	fn try_from_cmsghdr(cmsg: &'a libc::cmsghdr) -> Result<Self, AncillaryError> {
 		unsafe {
-			let cmsg_len_zero = libc::CMSG_LEN(0) as CmsgLen;
-			let data_len = (*cmsg).cmsg_len - cmsg_len_zero;
+			let cmsg_len_zero = libc::CMSG_LEN(0);
+			let data_len = (*cmsg).cmsg_len as usize - cmsg_len_zero as usize;
 			let data = libc::CMSG_DATA(cmsg).cast();
-			let data = from_raw_parts(data, data_len as usize);
+			let data = from_raw_parts(data, data_len);
 
 			match (*cmsg).cmsg_level {
 				libc::SOL_SOCKET => match (*cmsg).cmsg_type {
@@ -289,7 +276,7 @@ impl<'a> Iterator for Messages<'a> {
 		unsafe {
 			let mut msg: libc::msghdr = zeroed();
 			msg.msg_control = self.buffer.as_ptr() as *mut _;
-			msg.msg_controllen = self.buffer.len() as CmsgLen;
+			msg.msg_controllen = self.buffer.len() as _;
 
 			let cmsg = if let Some(current) = self.current {
 				libc::CMSG_NXTHDR(&msg, current)
