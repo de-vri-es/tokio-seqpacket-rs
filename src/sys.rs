@@ -194,7 +194,26 @@ pub fn recv_msg(
 	};
 	ancillary.truncated = header.msg_flags & libc::MSG_CTRUNC != 0;
 	ancillary.length = header.msg_controllen as usize;
+
+	// Illumos and solaris do not support MSG_CMSG_CLOEXEC,
+	// so we fix-up all received file descriptors manually.
+	#[cfg(any(target_os = "illumos", target_os = "solaris"))]
+	fixup_cloexec(&ancillary);
+
 	Ok(size)
+}
+
+#[cfg(any(target_os = "illumos", target_os = "solaris"))]
+fn fixup_cloexec(ancillary: &SocketAncillary) {
+	#[allow(irrefutable_let_patterns)]
+	for cmsg in ancillary.messages().filter_map(Result::ok) {
+		if let crate::ancillary::AncillaryData::ScmRights(fds) = cmsg {
+			for fd in fds {
+				let fd = core::mem::ManuallyDrop::new(FileDesc::new(fd));
+				fd.set_close_on_exec(true).ok();
+			}
+		}
+	}
 }
 
 fn path_to_sockaddr(path: &Path) -> std::io::Result<(libc::sockaddr_un, usize)> {
