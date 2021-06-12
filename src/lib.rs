@@ -51,14 +51,14 @@ macro_rules! ready {
 	};
 }
 
-pub mod ancillary;
 mod listener;
 mod socket;
+mod sys;
 mod ucred;
+pub mod ancillary;
 
 pub use listener::UnixSeqpacketListener;
 pub use socket::UnixSeqpacket;
-
 pub use ucred::UCred;
 
 #[doc(hidden)]
@@ -74,36 +74,3 @@ pub type ReadHalf<'a> = &'a UnixSeqpacket;
 	note = "all I/O functions now take a shared reference to self, so splitting is no longer necessary"
 )]
 pub type WriteHalf<'a> = &'a UnixSeqpacket;
-
-/// The socket type for a close-on-exec non-blocking seqpacket socket.
-const SOCKET_TYPE: socket2::Type = socket2::Type::SEQPACKET.cloexec().nonblocking();
-
-/// Get the Unix path of a socket address.
-///
-/// An error is retuend if the address is not a Unix address, or if it is an unnamed or abstract.
-fn address_path(address: &socket2::SockAddr) -> std::io::Result<&std::path::Path> {
-	use std::ffi::OsStr;
-	use std::os::unix::ffi::OsStrExt;
-	use std::path::Path;
-
-	if address.family() != libc::AF_LOCAL as _ {
-		Err(std::io::Error::new(
-			std::io::ErrorKind::InvalidData,
-			format!("address family is not AF_LOCAL/UNIX: {}", address.family()),
-		))
-	} else {
-		let len = address.len() as usize;
-		let address = address.as_ptr() as *const libc::sockaddr_un;
-		let path_start = unsafe { &(*address).sun_path }.as_ptr().cast::<u8>();
-		let path_len = len - unsafe { path_start.offset_from(address.cast::<u8>()) } as usize;
-		let path = unsafe { std::slice::from_raw_parts(path_start, path_len) };
-
-		// Some platforms include a trailing null byte in the path length.
-		let path = if path.last() == Some(&0) {
-			&path[..path.len() - 1]
-		} else {
-			path
-		};
-		Ok(Path::new(OsStr::from_bytes(path)))
-	}
-}

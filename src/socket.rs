@@ -1,12 +1,12 @@
-use std::convert::TryInto;
-use std::io::{IoSlice, IoSliceMut, Read};
+use filedesc::FileDesc;
+use std::io::{IoSlice, IoSliceMut};
 use std::os::unix::io::{AsRawFd, IntoRawFd};
 use std::path::Path;
 use std::task::{Context, Poll};
 use tokio::io::unix::AsyncFd;
 
 use crate::ancillary::SocketAncillary;
-use crate::UCred;
+use crate::{UCred, sys};
 
 /// Unix seqpacket socket.
 ///
@@ -14,7 +14,7 @@ use crate::UCred;
 /// That is because connected Unix sockets are always anonymous,
 /// which means that the address contains no useful information.
 pub struct UnixSeqpacket {
-	io: AsyncFd<socket2::Socket>,
+	io: AsyncFd<FileDesc>,
 }
 
 impl std::fmt::Debug for UnixSeqpacket {
@@ -26,16 +26,15 @@ impl std::fmt::Debug for UnixSeqpacket {
 }
 
 impl UnixSeqpacket {
-	pub(crate) fn new(socket: socket2::Socket) -> std::io::Result<Self> {
+	pub(crate) fn new(socket: FileDesc) -> std::io::Result<Self> {
 		let io = AsyncFd::new(socket)?;
 		Ok(Self { io })
 	}
 
 	/// Connect a new seqpacket socket to the given address.
 	pub async fn connect<P: AsRef<Path>>(address: P) -> std::io::Result<Self> {
-		let address = socket2::SockAddr::unix(address)?;
-		let socket = socket2::Socket::new(socket2::Domain::UNIX, crate::SOCKET_TYPE, None)?;
-		if let Err(e) = socket.connect(&address) {
+		let socket = sys::local_seqpacket_socket()?;
+		if let Err(e) = sys::connect(&socket, address) {
 			if e.kind() != std::io::ErrorKind::WouldBlock {
 				return Err(e);
 			}
@@ -48,10 +47,8 @@ impl UnixSeqpacket {
 
 	/// Create a pair of connected seqpacket sockets.
 	pub fn pair() -> std::io::Result<(Self, Self)> {
-		let (a, b) = socket2::Socket::pair(socket2::Domain::UNIX, crate::SOCKET_TYPE, None)?;
-		let a = Self::new(a)?;
-		let b = Self::new(b)?;
-		Ok((a, b))
+		let (a, b) = sys::local_seqpacket_pair()?;
+		Ok((Self::new(a)?, Self::new(b)?))
 	}
 
 	/// Wrap a raw file descriptor as [`UnixSeqpacket`].
@@ -64,8 +61,7 @@ impl UnixSeqpacket {
 	/// Usage of this function could accidentally allow violating this contract
 	/// which can cause memory unsafety in code that relies on it being true.
 	pub unsafe fn from_raw_fd(fd: std::os::unix::io::RawFd) -> std::io::Result<Self> {
-		use std::os::unix::io::FromRawFd;
-		Self::new(socket2::Socket::from_raw_fd(fd))
+		Self::new(FileDesc::from_raw_fd(fd))
 	}
 
 	/// Get the raw file descriptor of the socket.
@@ -95,9 +91,9 @@ impl UnixSeqpacket {
 		UCred::from_socket_peer(&self.io)
 	}
 
-	/// Get the value of the `SO_ERROR` option.
+	/// Get and clear the value of the `SO_ERROR` option.
 	pub fn take_error(&self) -> std::io::Result<Option<std::io::Error>> {
-		self.io.get_ref().take_error()
+		sys::take_socket_error(self.io.get_ref())
 	}
 
 	/// Try to send data on the socket to the connected peer without blocking.
@@ -110,7 +106,7 @@ impl UnixSeqpacket {
 		loop {
 			let mut ready_guard = ready!(self.io.poll_write_ready(cx)?);
 
-			match ready_guard.try_io(|inner| inner.get_ref().send(buffer)) {
+			match ready_guard.try_io(|inner| sys::send(inner.get_ref(), buffer)) {
 				Ok(result) => return Poll::Ready(result),
 				Err(_would_block) => continue,
 			}
@@ -141,7 +137,7 @@ impl UnixSeqpacket {
 	) -> Poll<std::io::Result<usize>> {
 		loop {
 			let mut ready_guard = ready!(self.io.poll_write_ready(cx)?);
-			match ready_guard.try_io(|inner| send_msg(inner.get_ref(), buffer, ancillary)) {
+			match ready_guard.try_io(|inner| sys::send_msg(inner.get_ref(), buffer, ancillary)) {
 				Ok(result) => return Poll::Ready(result),
 				Err(_would_block) => continue,
 			}
@@ -156,7 +152,7 @@ impl UnixSeqpacket {
 		loop {
 			let mut ready_guard = self.io.writable().await?;
 
-			match ready_guard.try_io(|inner| inner.get_ref().send(buffer)) {
+			match ready_guard.try_io(|inner| sys::send(inner.get_ref(), buffer)) {
 				Ok(result) => return result,
 				Err(_would_block) => continue,
 			}
@@ -183,7 +179,7 @@ impl UnixSeqpacket {
 	) -> std::io::Result<usize> {
 		loop {
 			let mut ready_guard = self.io.writable().await?;
-			match ready_guard.try_io(|inner| send_msg(inner.get_ref(), buffer, ancillary)) {
+			match ready_guard.try_io(|inner| sys::send_msg(inner.get_ref(), buffer, ancillary)) {
 				Ok(result) => return result,
 				Err(_would_block) => continue,
 			}
@@ -199,7 +195,7 @@ impl UnixSeqpacket {
 	pub fn poll_recv(&self, cx: &mut Context, buffer: &mut [u8]) -> Poll<std::io::Result<usize>> {
 		loop {
 			let mut ready_guard = ready!(self.io.poll_read_ready(cx)?);
-			match ready_guard.try_io(|inner| inner.get_ref().read(buffer)) {
+			match ready_guard.try_io(|inner| sys::recv(inner.get_ref(), buffer)) {
 				Ok(result) => return Poll::Ready(result),
 				Err(_would_block) => continue,
 			}
@@ -231,7 +227,7 @@ impl UnixSeqpacket {
 		loop {
 			let mut ready_guard = ready!(self.io.poll_read_ready(cx)?);
 
-			match ready_guard.try_io(|inner| recv_msg(inner.get_ref(), buffer, ancillary)) {
+			match ready_guard.try_io(|inner| sys::recv_msg(inner.get_ref(), buffer, ancillary)) {
 				Ok(result) => return Poll::Ready(result),
 				Err(_would_block) => continue,
 			}
@@ -245,8 +241,7 @@ impl UnixSeqpacket {
 	pub async fn recv(&self, buffer: &mut [u8]) -> std::io::Result<usize> {
 		loop {
 			let mut ready_guard = self.io.readable().await?;
-
-			match ready_guard.try_io(|inner| inner.get_ref().read(buffer)) {
+			match ready_guard.try_io(|inner| sys::recv(inner.get_ref(), buffer)) {
 				Ok(result) => return result,
 				Err(_would_block) => continue,
 			}
@@ -274,7 +269,7 @@ impl UnixSeqpacket {
 		loop {
 			let mut ready_guard = self.io.readable().await?;
 
-			match ready_guard.try_io(|inner| recv_msg(inner.get_ref(), buffer, ancillary)) {
+			match ready_guard.try_io(|inner| sys::recv_msg(inner.get_ref(), buffer, ancillary)) {
 				Ok(result) => return result,
 				Err(_would_block) => continue,
 			}
@@ -287,7 +282,7 @@ impl UnixSeqpacket {
 	/// specified portions to immediately return with an appropriate value
 	/// (see the documentation of `Shutdown`).
 	pub fn shutdown(&self, how: std::net::Shutdown) -> std::io::Result<()> {
-		self.io.get_ref().shutdown(how)
+		sys::shutdown(self.io.get_ref(), how)
 	}
 }
 
@@ -300,85 +295,5 @@ impl AsRawFd for UnixSeqpacket {
 impl IntoRawFd for UnixSeqpacket {
 	fn into_raw_fd(self) -> std::os::unix::io::RawFd {
 		self.into_raw_fd()
-	}
-}
-
-const SEND_MSG_DEFAULT_FLAGS: std::os::raw::c_int = libc::MSG_NOSIGNAL;
-const RECV_MSG_DEFAULT_FLAGS: std::os::raw::c_int = libc::MSG_NOSIGNAL | libc::MSG_CMSG_CLOEXEC;
-
-fn send_msg(socket: &socket2::Socket, buffer: &[IoSlice], ancillary: &mut SocketAncillary) -> std::io::Result<usize> {
-	ancillary.truncated = false;
-
-	let control_data = match ancillary.len() {
-		0 => std::ptr::null_mut(),
-		_ => ancillary.buffer.as_mut_ptr() as *mut std::os::raw::c_void,
-	};
-
-	let fd = socket.as_raw_fd();
-	let mut header: libc::msghdr = unsafe { std::mem::zeroed() };
-	header.msg_name = std::ptr::null_mut();
-	header.msg_namelen = 0;
-	header.msg_iov = buffer.as_ptr() as *mut libc::iovec;
-	// This is not a no-op on all platforms.
-	#[allow(clippy::useless_conversion)]
-	{
-		header.msg_iovlen = buffer.len().try_into().map_err(|_| std::io::ErrorKind::InvalidInput)?;
-	}
-	header.msg_flags = 0;
-	header.msg_control = control_data;
-	// This is not a no-op on all platforms.
-	#[allow(clippy::useless_conversion)]
-	{
-		header.msg_controllen = ancillary
-			.len()
-			.try_into()
-			.map_err(|_| std::io::ErrorKind::InvalidInput)?;
-	}
-
-	unsafe { check_returned_size(libc::sendmsg(fd, &header as *const _, SEND_MSG_DEFAULT_FLAGS)) }
-}
-
-fn recv_msg(
-	socket: &socket2::Socket,
-	buffer: &mut [IoSliceMut],
-	ancillary: &mut SocketAncillary,
-) -> std::io::Result<usize> {
-	let control_data = match ancillary.capacity() {
-		0 => std::ptr::null_mut(),
-		_ => ancillary.buffer.as_mut_ptr() as *mut std::os::raw::c_void,
-	};
-
-	let fd = socket.as_raw_fd();
-	let mut header: libc::msghdr = unsafe { std::mem::zeroed() };
-	header.msg_name = std::ptr::null_mut();
-	header.msg_namelen = 0;
-	header.msg_iov = buffer.as_ptr() as *mut libc::iovec;
-	// This is not a no-op on all platforms.
-	#[allow(clippy::useless_conversion)]
-	{
-		header.msg_iovlen = buffer.len().try_into().map_err(|_| std::io::ErrorKind::InvalidInput)?;
-	}
-	header.msg_flags = 0;
-	header.msg_control = control_data;
-	// This is not a no-op on all platforms.
-	#[allow(clippy::useless_conversion)]
-	{
-		header.msg_controllen = ancillary
-			.capacity()
-			.try_into()
-			.map_err(|_| std::io::ErrorKind::InvalidInput)?;
-	}
-
-	let size = unsafe { check_returned_size(libc::recvmsg(fd, &mut header as *mut _, RECV_MSG_DEFAULT_FLAGS))? };
-	ancillary.truncated = header.msg_flags & libc::MSG_CTRUNC != 0;
-	ancillary.length = header.msg_controllen as usize;
-	Ok(size)
-}
-
-fn check_returned_size(ret: isize) -> std::io::Result<usize> {
-	if ret < 0 {
-		Err(std::io::Error::last_os_error())
-	} else {
-		Ok(ret as usize)
 	}
 }

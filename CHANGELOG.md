@@ -1,8 +1,9 @@
 v0.5.2
   * Add conversions to/from raw FDs for `UnixSeqpacketListener`.
+  * Remove `socket2` dependency.
 
 v0.5.1
-  * Upgrade to socket2 0.4.
+  * Upgrade to `socket2` 0.4.
 
 v0.5.0
   * Report socket address as `PathBuf`.
