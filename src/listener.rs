@@ -1,4 +1,5 @@
-use std::os::unix::io::AsRawFd;
+use std::os::raw::c_int;
+use std::os::unix::io::{AsRawFd, IntoRawFd};
 use std::path::{Path, PathBuf};
 use std::task::{Context, Poll};
 use tokio::io::unix::AsyncFd;
@@ -43,6 +44,29 @@ impl UnixSeqpacketListener {
 		socket.bind(&address)?;
 		socket.listen(backlog)?;
 		Self::new(socket)
+	}
+
+	/// Wrap a raw file descriptor as [`UnixSeqpacket`].
+	///
+	/// Registration of the file descriptor with the tokio runtime may fail.
+	/// For that reason, this function returns a [`std::io::Result`].
+	///
+	/// # Safety
+	/// This function is unsafe because the socket assumes it is the sole owner of the file descriptor.
+	/// Usage of this function could accidentally allow violating this contract
+	/// which can cause memory unsafety in code that relies on it being true.
+	pub unsafe fn from_raw_fd(fd: std::os::unix::io::RawFd) -> std::io::Result<Self> {
+		Self::new(socket2::Socket::from_raw_fd(fd))
+	}
+
+	/// Get the raw file descriptor of the socket.
+	pub fn as_raw_fd(&self) -> std::os::unix::io::RawFd {
+		self.io.as_raw_fd()
+	}
+
+	/// Deregister the socket from the tokio runtime and return the inner file descriptor.
+	pub fn into_raw_fd(self) -> std::os::unix::io::RawFd {
+		self.io.into_inner().into_raw_fd()
 	}
 
 	/// Get the socket address of the local half of this connection.
@@ -96,5 +120,17 @@ impl UnixSeqpacketListener {
 
 		socket.set_nonblocking(true)?;
 		Ok(UnixSeqpacket::new(socket)?)
+	}
+}
+
+impl AsRawFd for UnixSeqpacketListener {
+	fn as_raw_fd(&self) -> std::os::unix::io::RawFd {
+		self.as_raw_fd()
+	}
+}
+
+impl IntoRawFd for UnixSeqpacketListener {
+	fn into_raw_fd(self) -> std::os::unix::io::RawFd {
+		self.into_raw_fd()
 	}
 }

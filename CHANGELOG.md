@@ -1,3 +1,6 @@
+v0.5.2
+  * Add conversions to/from raw FDs for `UnixSeqpacketListener`.
+
 v0.5.1
   * Upgrade to socket2 0.4.
 
