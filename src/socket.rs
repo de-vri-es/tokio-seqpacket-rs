@@ -147,7 +147,8 @@ impl UnixSeqpacket {
 	/// Send data on the socket to the connected peer.
 	///
 	/// This function is safe to call concurrently from different tasks.
-	/// Although no order is guaranteed, all calling tasks will try to complete the asynchronous action.
+	/// All calling tasks will try to complete the asynchronous action,
+	/// although the order in which they complete is not guaranteed.
 	pub async fn send(&self, buffer: &[u8]) -> std::io::Result<usize> {
 		loop {
 			let mut ready_guard = self.io.writable().await?;
@@ -162,7 +163,8 @@ impl UnixSeqpacket {
 	/// Send data on the socket to the connected peer.
 	///
 	/// This function is safe to call concurrently from different tasks.
-	/// Although no order is guaranteed, all calling tasks will try to complete the asynchronous action.
+	/// All calling tasks will try to complete the asynchronous action,
+	/// although the order in which they complete is not guaranteed.
 	pub async fn send_vectored(&self, buffer: &[IoSlice<'_>]) -> std::io::Result<usize> {
 		self.send_vectored_with_ancillary(buffer, &mut SocketAncillary::new(&mut []))
 			.await
@@ -171,7 +173,8 @@ impl UnixSeqpacket {
 	/// Send data with ancillary data on the socket to the connected peer.
 	///
 	/// This function is safe to call concurrently from different tasks.
-	/// Although no order is guaranteed, all calling tasks will try to complete the asynchronous action.
+	/// All calling tasks will try to complete the asynchronous action,
+	/// although the order in which they complete is not guaranteed.
 	pub async fn send_vectored_with_ancillary(
 		&self,
 		buffer: &[IoSlice<'_>],
@@ -237,7 +240,8 @@ impl UnixSeqpacket {
 	/// Receive data on the socket from the connected peer.
 	///
 	/// This function is safe to call concurrently from different tasks.
-	/// Although no order is guaranteed, all calling tasks will try to complete the asynchronous action.
+	/// All calling tasks will try to complete the asynchronous action,
+	/// although the order in which they complete is not guaranteed.
 	pub async fn recv(&self, buffer: &mut [u8]) -> std::io::Result<usize> {
 		loop {
 			let mut ready_guard = self.io.readable().await?;
@@ -251,7 +255,8 @@ impl UnixSeqpacket {
 	/// Receive data on the socket from the connected peer.
 	///
 	/// This function is safe to call concurrently from different tasks.
-	/// Although no order is guaranteed, all calling tasks will try to complete the asynchronous action.
+	/// All calling tasks will try to complete the asynchronous action,
+	/// although the order in which they complete is not guaranteed.
 	pub async fn recv_vectored(&self, buffer: &mut [IoSliceMut<'_>]) -> std::io::Result<usize> {
 		self.recv_vectored_with_ancillary(buffer, &mut SocketAncillary::new(&mut []))
 			.await
@@ -260,7 +265,8 @@ impl UnixSeqpacket {
 	/// Receive data with ancillary data on the socket from the connected peer.
 	///
 	/// This function is safe to call concurrently from different tasks.
-	/// Although no order is guaranteed, all calling tasks will try to complete the asynchronous action.
+	/// All calling tasks will try to complete the asynchronous action,
+	/// although the order in which they complete is not guaranteed.
 	pub async fn recv_vectored_with_ancillary(
 		&self,
 		buffer: &mut [IoSliceMut<'_>],
