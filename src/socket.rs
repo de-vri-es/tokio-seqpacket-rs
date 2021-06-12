@@ -217,6 +217,13 @@ impl UnixSeqpacket {
 
 	/// Try to receive data with ancillary data on the socket from the connected peer without blocking.
 	///
+	/// Any file descriptors received in the anicallary data will have the `close-on-exec` flag set.
+	/// If the OS supports it, this is done atomically with the reception of the message.
+	/// However, on Illumos and Solaris, the `close-on-exec` flag is set in a separate step after receiving the message.
+	///
+	/// Note that you should always wrap or close any file descriptors received this way.
+	/// If you do not, the received file descriptors will stay open until the process is terminated.
+	///
 	/// If there is no data ready yet, the current task is scheduled to wake up when the socket becomes readable.
 	///
 	/// Note that unlike [`Self::recv_vectored_with_ancillary`], only the last task calling this function will be woken up.
@@ -263,6 +270,13 @@ impl UnixSeqpacket {
 	}
 
 	/// Receive data with ancillary data on the socket from the connected peer.
+	///
+	/// Any file descriptors received in the anicallary data will have the `close-on-exec` flag set.
+	/// If the OS supports it, this is done atomically with the reception of the message.
+	/// However, on Illumos and Solaris, the `close-on-exec` flag is set in a separate step after receiving the message.
+	///
+	/// Note that you should always wrap or close any file descriptors received this way.
+	/// If you do not, the received file descriptors will stay open until the process is terminated.
 	///
 	/// This function is safe to call concurrently from different tasks.
 	/// All calling tasks will try to complete the asynchronous action,
