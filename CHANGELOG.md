@@ -1,3 +1,6 @@
+v0.5.3
+  * Update dependencies.
+
 v0.5.2
   * Add conversions to/from raw FDs for `UnixSeqpacketListener`.
   * Remove `socket2` dependency.
