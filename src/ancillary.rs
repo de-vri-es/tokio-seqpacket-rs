@@ -56,7 +56,7 @@ fn add_to_ancillary_data<T>(
 
 		let mut cmsg = libc::CMSG_FIRSTHDR(&msg);
 		let mut previous_cmsg = cmsg;
-		while !cmsg.is_null() {
+		while !cmsg.is_null() && (*cmsg).cmsg_len > 0 {
 			previous_cmsg = cmsg;
 			cmsg = libc::CMSG_NXTHDR(&msg, cmsg);
 		}
