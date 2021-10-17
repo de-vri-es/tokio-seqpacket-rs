@@ -112,11 +112,11 @@ impl<'a, T> Iterator for AncillaryDataIter<'a, T> {
 }
 
 /// Unix credential.
-#[cfg(any(doc, target_os = "android", target_os = "linux",))]
+#[cfg(any(target_os = "android", target_os = "linux",))]
 #[derive(Clone)]
 pub struct SocketCred(libc::ucred);
 
-#[cfg(any(doc, target_os = "android", target_os = "linux",))]
+#[cfg(any(target_os = "android", target_os = "linux",))]
 impl SocketCred {
 	/// Create a Unix credential struct.
 	///
@@ -173,10 +173,10 @@ impl<'a> Iterator for ScmRights<'a> {
 /// This control message contains unix credentials.
 ///
 /// The level is equal to `SOL_SOCKET` and the type is equal to `SCM_CREDENTIALS` or `SCM_CREDS`.
-#[cfg(any(doc, target_os = "android", target_os = "linux",))]
+#[cfg(any(target_os = "android", target_os = "linux",))]
 pub struct ScmCredentials<'a>(AncillaryDataIter<'a, libc::ucred>);
 
-#[cfg(any(doc, target_os = "android", target_os = "linux",))]
+#[cfg(any(target_os = "android", target_os = "linux",))]
 impl<'a> Iterator for ScmCredentials<'a> {
 	type Item = SocketCred;
 
@@ -205,7 +205,7 @@ pub enum AncillaryData<'a> {
 	ScmRights(ScmRights<'a>),
 
 	/// Ancillary data holding unix credentials.
-	#[cfg(any(doc, target_os = "android", target_os = "linux",))]
+	#[cfg(any(target_os = "android", target_os = "linux",))]
 	ScmCredentials(ScmCredentials<'a>),
 }
 
@@ -229,7 +229,7 @@ impl<'a> AncillaryData<'a> {
 	///
 	/// `data` must contain a valid control message and the control message must be type of
 	/// `SOL_SOCKET` and level of `SCM_CREDENTIALS` or `SCM_CREDENTIALS`.
-	#[cfg(any(doc, target_os = "android", target_os = "linux",))]
+	#[cfg(any(target_os = "android", target_os = "linux",))]
 	#[allow(clippy::wrong_self_convention)]
 	unsafe fn as_credentials(data: &'a [u8]) -> Self {
 		let ancillary_data_iter = AncillaryDataIter::new(data);
@@ -370,7 +370,7 @@ impl<'a> SocketAncillary<'a> {
 	/// Technically, that means this operation adds a control message with the level `SOL_SOCKET`
 	/// and type `SCM_CREDENTIALS` or `SCM_CREDS`.
 	///
-	#[cfg(any(doc, target_os = "android", target_os = "linux",))]
+	#[cfg(any(target_os = "android", target_os = "linux",))]
 	pub fn add_creds(&mut self, creds: &[SocketCred]) -> bool {
 		self.truncated = false;
 		add_to_ancillary_data(
