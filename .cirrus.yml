@@ -1,0 +1,21 @@
+freebsd_instance:
+  image: freebsd-12-2-release-amd64
+
+task:
+  name: FreeBSD (stable)
+  env:
+    HOME: /tmp  # cargo cache needs it
+  # Install Rust
+  setup_script:
+    - fetch https://sh.rustup.rs -o rustup.sh
+    - sh rustup.sh -y
+  cargo_cache:
+    folder: $HOME/.cargo/registry
+    fingerprint_script: cat Cargo.lock || echo ""
+  build_script:
+    - . $HOME/.cargo/env
+    - cargo build --all-features --color=always
+  test_script:
+    - . $HOME/.cargo/env
+    - cargo test --all-features --color=always
+  before_cache_script: rm -rf $HOME/.cargo/registry/index
