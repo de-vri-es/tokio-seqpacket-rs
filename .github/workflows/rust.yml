@@ -5,7 +5,7 @@ on:
 
 jobs:
   build_and_test:
-    name: Build and test
+    name: Linux
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
