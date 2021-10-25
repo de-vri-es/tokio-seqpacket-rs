@@ -41,6 +41,14 @@ impl UnixSeqpacketListener {
 	/// See `man 3 listen` for more information.
 	pub fn bind_with_backlog<P: AsRef<Path>>(address: P, backlog: c_int) -> std::io::Result<Self> {
 		let socket = sys::local_seqpacket_socket()?;
+
+		// Try to unlink the socket before binding it, ignoring errors.
+		if let Ok(stat) = sys::stat(&address) {
+			if (stat.st_mode & libc::S_IFMT) == libc::S_IFSOCK {
+				let _ = sys::unlink(&address);
+			}
+		}
+
 		sys::bind(&socket, address)?;
 		sys::listen(&socket, backlog)?;
 		Self::new(socket)

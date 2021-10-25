@@ -49,6 +49,23 @@ pub fn bind<P: AsRef<Path>>(socket: &FileDesc, address: P) -> std::io::Result<()
 	}
 }
 
+pub fn unlink<P: AsRef<Path>>(address: P) -> std::io::Result<()> {
+	let (mut address, _) = path_to_sockaddr(address.as_ref())?;
+	unsafe {
+		check(libc::unlink(address.sun_path.as_mut_ptr() as *mut i8))?;
+		Ok(())
+	}
+}
+
+pub fn stat<P: AsRef<Path>>(address: P) -> std::io::Result<libc::stat> {
+	let (mut address, _) = path_to_sockaddr(address.as_ref())?;
+	unsafe {
+		let mut stat: libc::stat = std::mem::zeroed();
+		check(libc::stat(address.sun_path.as_mut_ptr() as *mut i8, &mut stat))?;
+		Ok(stat)
+	}
+}
+
 pub fn listen(socket: &FileDesc, backlog: c_int) -> std::io::Result<()> {
 	unsafe {
 		check(libc::listen(socket.as_raw_fd(), backlog))?;

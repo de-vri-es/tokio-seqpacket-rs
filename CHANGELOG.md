@@ -1,3 +1,6 @@
+Unreleased:
+  * Unlink socket before binding.
+
 v0.5.4:
   * Fix sending ancillary data on non-Linux platforms.
   * Fix building of documentation on non-Linux platforms.
