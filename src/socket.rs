@@ -65,6 +65,9 @@ impl UnixSeqpacket {
 	}
 
 	/// Get the raw file descriptor of the socket.
+	///
+	/// This is a shortcut for `seqpacket.as_async_fd().as_raw_fd()`.
+	/// See [`as_async_fd`](Self::as_async_fd).
 	pub fn as_raw_fd(&self) -> std::os::unix::io::RawFd {
 		self.io.as_raw_fd()
 	}
@@ -81,6 +84,23 @@ impl UnixSeqpacket {
 	)]
 	pub fn split(&self) -> (&Self, &Self) {
 		(self, self)
+	}
+
+	/// Get the async file descriptor of this object.
+	///
+	/// This can be useful for applications that want to do low-level socket calls, such as
+	/// [`sendmsg`](libc::sendmsg), but still want to use async and need to know when the socket is
+	/// ready to be used.
+	///
+	/// Example:
+	/// ```
+	/// # async fn f() -> std::io::Result<()> {
+	/// let seqpacket = tokio_seqpacket::UnixSeqpacket::connect("/tmp/example.sock").await?;
+	/// seqpacket.as_async_fd().writable().await?.retain_ready();
+	/// # Ok(()) }
+	/// ```
+	pub fn as_async_fd(&self) -> &AsyncFd<FileDesc> {
+		&self.io
 	}
 
 	/// Get the effective credentials of the process which called `connect` or `pair`.
