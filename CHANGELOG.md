@@ -1,3 +1,6 @@
+main:
+  * Add `as_async_fd()` to facilitate low level access to the file descriptor.
+
 v0.5.4:
   * Fix sending ancillary data on non-Linux platforms.
   * Fix building of documentation on non-Linux platforms.
