@@ -355,7 +355,7 @@ impl<'a> SocketAncillary<'a> {
 	pub fn add_fds(&mut self, fds: &[RawFd]) -> bool {
 		self.truncated = false;
 		add_to_ancillary_data(
-			&mut self.buffer,
+			self.buffer,
 			&mut self.length,
 			fds,
 			libc::SOL_SOCKET,
@@ -374,7 +374,7 @@ impl<'a> SocketAncillary<'a> {
 	pub fn add_creds(&mut self, creds: &[SocketCred]) -> bool {
 		self.truncated = false;
 		add_to_ancillary_data(
-			&mut self.buffer,
+			self.buffer,
 			&mut self.length,
 			creds,
 			libc::SOL_SOCKET,

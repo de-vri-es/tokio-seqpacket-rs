@@ -116,7 +116,7 @@ impl UnixSeqpacketListener {
 			}
 		};
 
-		Ok(UnixSeqpacket::new(socket)?)
+		UnixSeqpacket::new(socket)
 	}
 }
 
