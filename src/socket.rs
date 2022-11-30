@@ -6,7 +6,7 @@ use std::task::{Context, Poll};
 use tokio::io::unix::AsyncFd;
 
 use crate::ancillary::SocketAncillary;
-use crate::{UCred, sys};
+use crate::{sys, UCred};
 
 /// Unix seqpacket socket.
 ///

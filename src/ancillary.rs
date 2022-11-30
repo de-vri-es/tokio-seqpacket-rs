@@ -240,12 +240,12 @@ impl<'a> AncillaryData<'a> {
 	fn try_from_cmsghdr(cmsg: &'a libc::cmsghdr) -> Result<Self, AncillaryError> {
 		unsafe {
 			let cmsg_len_zero = libc::CMSG_LEN(0);
-			let data_len = (*cmsg).cmsg_len as usize - cmsg_len_zero as usize;
+			let data_len = cmsg.cmsg_len as usize - cmsg_len_zero as usize;
 			let data = libc::CMSG_DATA(cmsg).cast();
 			let data = from_raw_parts(data, data_len);
 
-			match (*cmsg).cmsg_level {
-				libc::SOL_SOCKET => match (*cmsg).cmsg_type {
+			match cmsg.cmsg_level {
+				libc::SOL_SOCKET => match cmsg.cmsg_type {
 					libc::SCM_RIGHTS => Ok(AncillaryData::as_rights(data)),
 					#[cfg(any(target_os = "android", target_os = "linux",))]
 					libc::SCM_CREDENTIALS => Ok(AncillaryData::as_credentials(data)),
@@ -256,7 +256,7 @@ impl<'a> AncillaryData<'a> {
 				},
 				cmsg_level => Err(AncillaryError::Unknown {
 					cmsg_level,
-					cmsg_type: (*cmsg).cmsg_type,
+					cmsg_type: cmsg.cmsg_type,
 				}),
 			}
 		}
@@ -354,13 +354,7 @@ impl<'a> SocketAncillary<'a> {
 	/// and type `SCM_RIGHTS`.
 	pub fn add_fds(&mut self, fds: &[RawFd]) -> bool {
 		self.truncated = false;
-		add_to_ancillary_data(
-			self.buffer,
-			&mut self.length,
-			fds,
-			libc::SOL_SOCKET,
-			libc::SCM_RIGHTS,
-		)
+		add_to_ancillary_data(self.buffer, &mut self.length, fds, libc::SOL_SOCKET, libc::SCM_RIGHTS)
 	}
 
 	/// Add credentials to the ancillary data.

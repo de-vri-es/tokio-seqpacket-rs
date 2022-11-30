@@ -51,11 +51,11 @@ macro_rules! ready {
 	};
 }
 
+pub mod ancillary;
 mod listener;
 mod socket;
 mod sys;
 mod ucred;
-pub mod ancillary;
 
 pub use listener::UnixSeqpacketListener;
 pub use socket::UnixSeqpacket;

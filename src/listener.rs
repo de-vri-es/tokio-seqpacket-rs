@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::task::{Context, Poll};
 use tokio::io::unix::AsyncFd;
 
-use crate::{UnixSeqpacket, sys};
+use crate::{sys, UnixSeqpacket};
 
 /// Listener for Unix seqpacket sockets.
 pub struct UnixSeqpacketListener {

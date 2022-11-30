@@ -3,7 +3,7 @@ use std::io::{IoSlice, IoSliceMut, Read, Seek, Write};
 use std::os::unix::io::{AsRawFd, FromRawFd};
 use tempfile::tempfile;
 use tokio_seqpacket::ancillary::{AncillaryData, SocketAncillary};
-use tokio_seqpacket::{UnixSeqpacket};
+use tokio_seqpacket::UnixSeqpacket;
 
 #[tokio::test]
 async fn pass_fd() {

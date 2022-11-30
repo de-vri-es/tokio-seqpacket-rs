@@ -80,9 +80,7 @@ fn get_peer_cred<T: AsRawFd>(sock: &T) -> std::io::Result<UCred> {
 	let mut uid = 0;
 	let mut gid = 0;
 
-	let ret = unsafe {
-		libc::getpeereid(raw_fd, &mut uid, &mut gid)
-	};
+	let ret = unsafe { libc::getpeereid(raw_fd, &mut uid, &mut gid) };
 
 	if ret == 0 {
 		Ok(UCred { uid, gid, pid: None })
