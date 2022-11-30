@@ -12,7 +12,7 @@ description = "unix seqpacket sockets for tokio"
 keywords = ["seqpacket", "socket", "unix", "async", "tokio"]
 categories = ["network-programming", "os::unix-apis"]
 
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 libc = "0.2.96"
