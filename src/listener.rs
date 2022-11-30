@@ -1,7 +1,7 @@
 use filedesc::FileDesc;
 use std::os::raw::c_int;
 use std::os::unix::io::{AsRawFd, IntoRawFd};
-use std::os::unix::prelude::OwnedFd;
+use std::os::unix::prelude::{AsFd, OwnedFd};
 use std::path::{Path, PathBuf};
 use std::task::{Context, Poll};
 use tokio::io::unix::AsyncFd;
@@ -18,6 +18,12 @@ impl std::fmt::Debug for UnixSeqpacketListener {
 		f.debug_struct("UnixSeqpacketListener")
 			.field("fd", &self.io.get_ref().as_raw_fd())
 			.finish()
+	}
+}
+
+impl AsFd for UnixSeqpacketListener {
+	fn as_fd(&self) -> std::os::unix::prelude::BorrowedFd<'_> {
+		self.io.get_ref().as_fd()
 	}
 }
 
