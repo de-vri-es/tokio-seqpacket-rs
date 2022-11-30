@@ -18,7 +18,7 @@ const RECV_MSG_DEFAULT_FLAGS: c_int = libc::MSG_NOSIGNAL | libc::MSG_CMSG_CLOEXE
 pub fn local_seqpacket_socket() -> std::io::Result<FileDesc> {
 	unsafe {
 		let fd = check(libc::socket(libc::AF_UNIX, SOCKET_TYPE, 0))?;
-		Ok(FileDesc::new(fd))
+		Ok(FileDesc::from_raw_fd(fd))
 	}
 }
 
@@ -66,7 +66,7 @@ pub fn accept(socket: &FileDesc) -> std::io::Result<FileDesc> {
 			&mut addr_len,
 			SOCKET_FLAGS,
 		))?;
-		Ok(FileDesc::new(fd))
+		Ok(FileDesc::from_raw_fd(fd))
 	}
 }
 
