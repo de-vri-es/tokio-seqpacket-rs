@@ -18,7 +18,7 @@ const RECV_MSG_DEFAULT_FLAGS: c_int = libc::MSG_NOSIGNAL | libc::MSG_CMSG_CLOEXE
 pub fn local_seqpacket_socket() -> std::io::Result<FileDesc> {
 	unsafe {
 		let fd = check(libc::socket(libc::AF_UNIX, SOCKET_TYPE, 0))?;
-		Ok(FileDesc::new(fd))
+		Ok(FileDesc::from_raw_fd(fd))
 	}
 }
 
@@ -26,17 +26,18 @@ pub fn local_seqpacket_pair() -> std::io::Result<(FileDesc, FileDesc)> {
 	unsafe {
 		let mut fds: [c_int; 2] = [0, 0];
 		check(libc::socketpair(libc::AF_UNIX, SOCKET_TYPE, 0, fds.as_mut_ptr()))?;
-		Ok((
-			FileDesc::from_raw_fd(fds[0]),
-			FileDesc::from_raw_fd(fds[1]),
-		))
+		Ok((FileDesc::from_raw_fd(fds[0]), FileDesc::from_raw_fd(fds[1])))
 	}
 }
 
 pub fn connect<P: AsRef<Path>>(socket: &FileDesc, address: P) -> std::io::Result<()> {
 	let (address, addr_len) = path_to_sockaddr(address.as_ref())?;
 	unsafe {
-		check(libc::connect(socket.as_raw_fd(), &address as *const _ as *const libc::sockaddr, addr_len as _))?;
+		check(libc::connect(
+			socket.as_raw_fd(),
+			&address as *const _ as *const libc::sockaddr,
+			addr_len as _,
+		))?;
 		Ok(())
 	}
 }
@@ -44,7 +45,11 @@ pub fn connect<P: AsRef<Path>>(socket: &FileDesc, address: P) -> std::io::Result
 pub fn bind<P: AsRef<Path>>(socket: &FileDesc, address: P) -> std::io::Result<()> {
 	let (address, addr_len) = path_to_sockaddr(address.as_ref())?;
 	unsafe {
-		check(libc::bind(socket.as_raw_fd(), &address as *const _ as *const _, addr_len as _))?;
+		check(libc::bind(
+			socket.as_raw_fd(),
+			&address as *const _ as *const _,
+			addr_len as _,
+		))?;
 		Ok(())
 	}
 }
@@ -66,7 +71,7 @@ pub fn accept(socket: &FileDesc) -> std::io::Result<FileDesc> {
 			&mut addr_len,
 			SOCKET_FLAGS,
 		))?;
-		Ok(FileDesc::new(fd))
+		Ok(FileDesc::from_raw_fd(fd))
 	}
 }
 
@@ -86,7 +91,13 @@ pub fn take_socket_error(socket: &FileDesc) -> std::io::Result<Option<std::io::E
 	unsafe {
 		let mut error: c_int = 0;
 		let mut len = core::mem::size_of::<c_int>() as libc::socklen_t;
-		check(libc::getsockopt(socket.as_raw_fd(), libc::SOL_SOCKET, libc::SO_ERROR, &mut error as *mut c_int as *mut c_void, &mut len))?;
+		check(libc::getsockopt(
+			socket.as_raw_fd(),
+			libc::SOL_SOCKET,
+			libc::SO_ERROR,
+			&mut error as *mut c_int as *mut c_void,
+			&mut len,
+		))?;
 		if error == 0 {
 			Ok(None)
 		} else {
@@ -110,7 +121,12 @@ pub fn get_local_address(socket: &FileDesc) -> std::io::Result<PathBuf> {
 
 pub fn send(socket: &FileDesc, buffer: &[u8]) -> std::io::Result<usize> {
 	unsafe {
-		check_size(libc::send(socket.as_raw_fd(), buffer.as_ptr() as *const c_void, buffer.len(), SEND_MSG_DEFAULT_FLAGS))
+		check_size(libc::send(
+			socket.as_raw_fd(),
+			buffer.as_ptr() as *const c_void,
+			buffer.len(),
+			SEND_MSG_DEFAULT_FLAGS,
+		))
 	}
 }
 
@@ -143,17 +159,21 @@ pub fn send_msg(socket: &FileDesc, buffer: &[IoSlice], ancillary: &mut SocketAnc
 	}
 
 	unsafe {
-		check_size(libc::sendmsg(socket.as_raw_fd(), &header as *const _, SEND_MSG_DEFAULT_FLAGS))
+		check_size(libc::sendmsg(
+			socket.as_raw_fd(),
+			&header as *const _,
+			SEND_MSG_DEFAULT_FLAGS,
+		))
 	}
 }
 
 pub fn recv(socket: &FileDesc, buffer: &mut [u8]) -> std::io::Result<usize> {
 	unsafe {
 		let read = check_size(libc::recv(
-				socket.as_raw_fd(),
-				buffer.as_mut_ptr() as *mut c_void,
-				buffer.len(),
-				RECV_MSG_DEFAULT_FLAGS
+			socket.as_raw_fd(),
+			buffer.as_mut_ptr() as *mut c_void,
+			buffer.len(),
+			RECV_MSG_DEFAULT_FLAGS,
 		))?;
 		Ok(read)
 	}
@@ -190,7 +210,11 @@ pub fn recv_msg(
 	}
 
 	let size = unsafe {
-		check_size(libc::recvmsg(socket.as_raw_fd(), &mut header as *mut _, RECV_MSG_DEFAULT_FLAGS))?
+		check_size(libc::recvmsg(
+			socket.as_raw_fd(),
+			&mut header as *mut _,
+			RECV_MSG_DEFAULT_FLAGS,
+		))?
 	};
 	ancillary.truncated = header.msg_flags & libc::MSG_CTRUNC != 0;
 	ancillary.length = header.msg_controllen as usize;
@@ -224,7 +248,10 @@ fn path_to_sockaddr(path: &Path) -> std::io::Result<(libc::sockaddr_un, usize)> 
 		let max_len = core::mem::size_of_val(&sockaddr.sun_path) - 1;
 
 		if path.len() > max_len {
-			return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "path length exceeds maximum sockaddr length"));
+			return Err(std::io::Error::new(
+				std::io::ErrorKind::InvalidInput,
+				"path length exceeds maximum sockaddr length",
+			));
 		}
 
 		sockaddr.sun_family = libc::AF_UNIX as _;

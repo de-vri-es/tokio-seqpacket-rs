@@ -1,11 +1,11 @@
 use filedesc::FileDesc;
 use std::os::raw::c_int;
-use std::os::unix::io::{AsRawFd, IntoRawFd};
+use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, IntoRawFd, OwnedFd};
 use std::path::{Path, PathBuf};
 use std::task::{Context, Poll};
 use tokio::io::unix::AsyncFd;
 
-use crate::{UnixSeqpacket, sys};
+use crate::{sys, UnixSeqpacket};
 
 /// Listener for Unix seqpacket sockets.
 pub struct UnixSeqpacketListener {
@@ -17,6 +17,20 @@ impl std::fmt::Debug for UnixSeqpacketListener {
 		f.debug_struct("UnixSeqpacketListener")
 			.field("fd", &self.io.get_ref().as_raw_fd())
 			.finish()
+	}
+}
+
+impl AsFd for UnixSeqpacketListener {
+	fn as_fd(&self) -> BorrowedFd<'_> {
+		self.io.get_ref().as_fd()
+	}
+}
+
+impl TryFrom<OwnedFd> for UnixSeqpacketListener {
+	type Error = std::io::Error;
+
+	fn try_from(fd: OwnedFd) -> Result<Self, Self::Error> {
+		Self::new(FileDesc::new(fd))
 	}
 }
 

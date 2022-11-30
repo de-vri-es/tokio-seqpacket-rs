@@ -1,12 +1,12 @@
 use filedesc::FileDesc;
 use std::io::{IoSlice, IoSliceMut};
-use std::os::unix::io::{AsRawFd, IntoRawFd};
+use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, IntoRawFd, OwnedFd};
 use std::path::Path;
 use std::task::{Context, Poll};
 use tokio::io::unix::AsyncFd;
 
 use crate::ancillary::SocketAncillary;
-use crate::{UCred, sys};
+use crate::{sys, UCred};
 
 /// Unix seqpacket socket.
 ///
@@ -22,6 +22,20 @@ impl std::fmt::Debug for UnixSeqpacket {
 		f.debug_struct("UnixSeqpacket")
 			.field("fd", &self.io.get_ref().as_raw_fd())
 			.finish()
+	}
+}
+
+impl AsFd for UnixSeqpacket {
+	fn as_fd(&self) -> BorrowedFd<'_> {
+		self.io.get_ref().as_fd()
+	}
+}
+
+impl TryFrom<OwnedFd> for UnixSeqpacket {
+	type Error = std::io::Error;
+
+	fn try_from(fd: OwnedFd) -> Result<Self, Self::Error> {
+		Self::new(FileDesc::new(fd))
 	}
 }
 
