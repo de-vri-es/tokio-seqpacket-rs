@@ -1,4 +1,8 @@
 main:
+  * Implement `AsFd` for `UnixSeqpacket` and `UnixSeqpacketListener`.
+  * Implement `TryFrom<OwnedFd>` for `UnixSeqpacket` and `UnixSeqpacketListener`.
+
+v0.5.5:
   * Add `as_async_fd()` to facilitate low level access to the file descriptor.
 
 v0.5.4:
