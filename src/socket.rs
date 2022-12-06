@@ -65,6 +65,19 @@ impl UnixSeqpacket {
 		Ok(socket)
 	}
 
+	/// Connect to a socket without checking for the writeable flag
+	pub fn try_connect<P: AsRef<Path>>(address: P) -> std::io::Result<Self> {
+		let socket = sys::local_seqpacket_socket()?;
+		if let Err(e) = sys::connect(&socket, address) {
+			if e.kind() != std::io::ErrorKind::WouldBlock {
+				return Err(e);
+			}
+		}
+
+		let socket = Self::new(socket)?;
+		Ok(socket)
+	}
+
 	/// Create a pair of connected seqpacket sockets.
 	pub fn pair() -> std::io::Result<(Self, Self)> {
 		let (a, b) = sys::local_seqpacket_pair()?;
