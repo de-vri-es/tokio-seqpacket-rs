@@ -6,6 +6,7 @@
 
 use std::marker::PhantomData;
 use std::mem::{size_of, zeroed};
+use std::os::fd::BorrowedFd;
 use std::os::unix::io::RawFd;
 use std::ptr::read_unaligned;
 use std::slice::from_raw_parts;
@@ -477,7 +478,7 @@ impl<'a> SocketAncillary<'a> {
 	/// ```no_run
 	/// use tokio_seqpacket::UnixSeqpacket;
 	/// use tokio_seqpacket::ancillary::SocketAncillary;
-	/// use std::os::unix::io::AsRawFd;
+	/// use std::os::unix::io::AsFd;
 	/// use std::io::IoSlice;
 	///
 	/// #[tokio::main]
@@ -486,7 +487,7 @@ impl<'a> SocketAncillary<'a> {
 	///
 	///     let mut ancillary_buffer = [0; 128];
 	///     let mut ancillary = SocketAncillary::new(&mut ancillary_buffer[..]);
-	///     ancillary.add_fds(&[sock.as_raw_fd()][..]);
+	///     ancillary.add_fds(&[sock.as_fd()][..]);
 	///
 	///     let buf = [1; 8];
 	///     let mut bufs = &mut [IoSlice::new(&buf[..])][..];
@@ -494,7 +495,7 @@ impl<'a> SocketAncillary<'a> {
 	///     Ok(())
 	/// }
 	/// ```
-	pub fn add_fds(&mut self, fds: &[RawFd]) -> bool {
+	pub fn add_fds(&mut self, fds: &[BorrowedFd<'a>]) -> bool {
 		self.truncated = false;
 		add_to_ancillary_data(
 			self.buffer,

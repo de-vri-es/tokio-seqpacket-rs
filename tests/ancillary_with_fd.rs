@@ -1,6 +1,6 @@
 use assert2::{assert, let_assert};
 use std::io::{IoSlice, IoSliceMut, Read, Seek, Write};
-use std::os::unix::io::{AsRawFd, FromRawFd};
+use std::os::unix::io::{AsFd, FromRawFd};
 use tempfile::tempfile;
 use tokio_seqpacket::ancillary::{AncillaryData, SocketAncillary};
 use tokio_seqpacket::UnixSeqpacket;
@@ -9,13 +9,13 @@ use tokio_seqpacket::UnixSeqpacket;
 async fn pass_fd() {
 	let_assert!(Ok(mut file) = tempfile());
 	assert!(let Ok(_) = file.write_all(b"Wie dit leest is gek."));
-	assert!(let Ok(0) = file.seek(std::io::SeekFrom::Start(0)));
+	assert!(let Ok(()) = file.rewind());
 
 	let_assert!(Ok((a, b)) = UnixSeqpacket::pair());
 
 	let mut cmsg = [0; 64];
 	let mut cmsg = SocketAncillary::new(&mut cmsg);
-	cmsg.add_fds(&[file.as_raw_fd()]);
+	cmsg.add_fds(&[file.as_fd()]);
 
 	assert!(let Ok(29) = a.send_vectored_with_ancillary(&[IoSlice::new(b"Here, have a file descriptor.")], &mut cmsg).await);
 	drop(file);
