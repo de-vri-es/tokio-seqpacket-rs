@@ -217,7 +217,10 @@ pub fn recv_msg(
 		))?
 	};
 	ancillary.truncated = header.msg_flags & libc::MSG_CTRUNC != 0;
-	ancillary.length = header.msg_controllen as usize;
+	#[allow(clippy::unnecessary_cast)]
+	{
+		ancillary.length = header.msg_controllen as usize;
+	}
 
 	// Illumos and solaris do not support MSG_CMSG_CLOEXEC,
 	// so we fix-up all received file descriptors manually.
