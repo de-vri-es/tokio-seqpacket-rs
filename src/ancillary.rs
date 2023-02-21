@@ -383,11 +383,11 @@ impl<'a> Iterator for Messages<'a> {
 ///
 ///     let mut fds = [0; 8];
 ///     let mut ancillary_buffer = [0; 128];
-///     let mut ancillary = SocketAncillary::new(&mut ancillary_buffer[..]);
+///     let mut ancillary = SocketAncillary::new(&mut ancillary_buffer);
 ///
 ///     let mut buf = [1; 8];
-///     let mut bufs = &mut [IoSliceMut::new(&mut buf[..])][..];
-///     sock.recv_vectored_with_ancillary(bufs, &mut ancillary).await?;
+///     let mut bufs = [IoSliceMut::new(&mut buf)];
+///     sock.recv_vectored_with_ancillary(&mut bufs, &mut ancillary).await?;
 ///
 ///     for ancillary_result in ancillary.messages() {
 ///         if let AncillaryData::ScmRights(scm_rights) = ancillary_result.unwrap() {
@@ -415,7 +415,7 @@ impl<'a> SocketAncillary<'a> {
 	/// # #![allow(unused_mut)]
 	/// use tokio_seqpacket::ancillary::SocketAncillary;
 	/// let mut ancillary_buffer = [0; 128];
-	/// let mut ancillary = SocketAncillary::new(&mut ancillary_buffer[..]);
+	/// let mut ancillary = SocketAncillary::new(&mut ancillary_buffer);
 	/// ```
 	pub fn new(buffer: &'a mut [u8]) -> Self {
 		SocketAncillary { buffer, length: 0, truncated: false }
@@ -455,10 +455,10 @@ impl<'a> SocketAncillary<'a> {
 	///     let sock = UnixSeqpacket::connect("/tmp/sock").await?;
 	///
 	///     let mut ancillary_buffer = [0; 128];
-	///     let mut ancillary = SocketAncillary::new(&mut ancillary_buffer[..]);
+	///     let mut ancillary = SocketAncillary::new(&mut ancillary_buffer);
 	///
 	///     let mut buf = [1; 8];
-	///     let mut bufs = &mut [IoSliceMut::new(&mut buf[..])][..];
+	///     let mut bufs = &mut [IoSliceMut::new(&mut buf)];
 	///     sock.recv_vectored_with_ancillary(bufs, &mut ancillary).await?;
 	///
 	///     println!("Is truncated: {}", ancillary.truncated());
@@ -490,11 +490,11 @@ impl<'a> SocketAncillary<'a> {
 	///     let file = std::fs::File::open("/my/file")?;
 	///
 	///     let mut ancillary_buffer = [0; 128];
-	///     let mut ancillary = SocketAncillary::new(&mut ancillary_buffer[..]);
+	///     let mut ancillary = SocketAncillary::new(&mut ancillary_buffer);
 	///     ancillary.add_fds(&[file.as_fd()]);
 	///
 	///     let buf = [1; 8];
-	///     let mut bufs = &mut [IoSlice::new(&buf[..])][..];
+	///     let mut bufs = &mut [IoSlice::new(&buf)];
 	///     sock.send_vectored_with_ancillary(bufs, &mut ancillary).await?;
 	///     Ok(())
 	/// }
@@ -549,10 +549,10 @@ impl<'a> SocketAncillary<'a> {
 	///     let mut fds1 = [0; 8];
 	///     let mut fds2 = [0; 8];
 	///     let mut ancillary_buffer = [0; 128];
-	///     let mut ancillary = SocketAncillary::new(&mut ancillary_buffer[..]);
+	///     let mut ancillary = SocketAncillary::new(&mut ancillary_buffer);
 	///
 	///     let mut buf = [1; 8];
-	///     let mut bufs = &mut [IoSliceMut::new(&mut buf[..])][..];
+	///     let mut bufs = &mut [IoSliceMut::new(&mut buf)];
 	///
 	///     sock.recv_vectored_with_ancillary(bufs, &mut ancillary).await?;
 	///     for ancillary_result in ancillary.messages() {
