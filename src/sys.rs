@@ -224,11 +224,6 @@ pub fn recv_msg(
 	}
 
 	post_process_fds(ancillary);
-	// Illumos and solaris do not support MSG_CMSG_CLOEXEC,
-	// so we fix-up all received file descriptors manually.
-	#[cfg(any(target_os = "illumos", target_os = "solaris"))]
-	fixup_cloexec(&ancillary);
-
 	Ok(size)
 }
 
@@ -244,8 +239,10 @@ fn post_process_fds(ancillary: &mut SocketAncillary) {
 		#[allow(irrefutable_let_patterns)]
 		if let crate::ancillary::AncillaryData::ScmRights(fds) = cmsg {
 			for fd in fds {
+				// Illumos and solaris do not support MSG_CMSG_CLOEXEC,
+				// so we fix-up all received file descriptors manually.
 				#[cfg(any(target_os = "illumos", target_os = "solaris"))]
-				fixup_cloexec(&fd);
+				fixup_cloexec(fd);
 
 				// Safety: the file descriptor comes from a just received ancillary message.
 				// Nobody is owning the file descriptor yet.
@@ -259,8 +256,8 @@ fn post_process_fds(ancillary: &mut SocketAncillary) {
 }
 
 #[cfg(any(target_os = "illumos", target_os = "solaris"))]
-fn fixup_cloexec(fd: BorrowedFd<'_>) {
-	use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+fn fixup_cloexec(fd: std::os::fd::BorrowedFd<'_>) {
+	use std::os::fd::AsRawFd;
 	// Safety: the file descriptor is guaranteed to be valid by `BorrowedFd`.
 	// And because the `FileDesc` is wrapped in a `ManuallyDrop`, we never close it here.
 	let fd = core::mem::ManuallyDrop::new(unsafe { FileDesc::from_raw_fd(fd.as_raw_fd()) });
