@@ -113,11 +113,12 @@ impl<'a, T> Iterator for AncillaryDataIter<'a, T> {
 #[derive(Clone)]
 pub struct SocketCred(());
 
-/// Unix credential.
+/// Unix credentials.
 #[cfg(any(target_os = "android", target_os = "linux",))]
 #[derive(Clone)]
 pub struct SocketCred(libc::ucred);
 
+/// Unix credentials.
 #[cfg(target_os = "netbsd")]
 #[derive(Clone)]
 pub struct SocketCred(libc::sockcred);
@@ -230,6 +231,9 @@ impl<'a> Iterator for ScmRights<'a> {
 	}
 }
 
+/// This control message contains unix credentials.
+///
+/// The level is equal to `SOL_SOCKET` and the type is equal to `SCM_CREDENTIALS` or `SCM_CREDS`.
 #[cfg(all(doc, not(target_os = "android"), not(target_os = "linux"), not(target_os = "netbsd")))]
 pub struct ScmCredentials<'a>(AncillaryDataIter<'a, ()>);
 
@@ -239,6 +243,9 @@ pub struct ScmCredentials<'a>(AncillaryDataIter<'a, ()>);
 #[cfg(any(target_os = "android", target_os = "linux",))]
 pub struct ScmCredentials<'a>(AncillaryDataIter<'a, libc::ucred>);
 
+/// This control message contains unix credentials.
+///
+/// The level is equal to `SOL_SOCKET` and the type is equal to `SCM_CREDENTIALS` or `SCM_CREDS`.
 #[cfg(target_os = "netbsd")]
 pub struct ScmCredentials<'a>(AncillaryDataIter<'a, libc::sockcred>);
 
