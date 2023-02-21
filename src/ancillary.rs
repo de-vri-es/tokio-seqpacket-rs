@@ -6,7 +6,7 @@
 
 use std::marker::PhantomData;
 use std::mem::{size_of, zeroed};
-use std::os::fd::{BorrowedFd, RawFd};
+use std::os::fd::{BorrowedFd, RawFd, OwnedFd};
 use std::ptr::read_unaligned;
 use std::slice::from_raw_parts;
 
@@ -404,6 +404,7 @@ pub struct SocketAncillary<'a> {
 	pub(crate) buffer: &'a mut [u8],
 	pub(crate) length: usize,
 	pub(crate) truncated: bool,
+	pub(crate) owned_fds: Vec<OwnedFd>,
 }
 
 impl<'a> SocketAncillary<'a> {
@@ -418,7 +419,7 @@ impl<'a> SocketAncillary<'a> {
 	/// let mut ancillary = SocketAncillary::new(&mut ancillary_buffer);
 	/// ```
 	pub fn new(buffer: &'a mut [u8]) -> Self {
-		SocketAncillary { buffer, length: 0, truncated: false }
+		SocketAncillary { buffer, length: 0, truncated: false, owned_fds: Vec::new() }
 	}
 
 	/// Returns the capacity of the buffer.

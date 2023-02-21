@@ -217,11 +217,13 @@ pub fn recv_msg(
 		))?
 	};
 	ancillary.truncated = header.msg_flags & libc::MSG_CTRUNC != 0;
+	// This is not a no-op on all platforms.
 	#[allow(clippy::unnecessary_cast)]
 	{
 		ancillary.length = header.msg_controllen as usize;
 	}
 
+	post_process_fds(ancillary);
 	// Illumos and solaris do not support MSG_CMSG_CLOEXEC,
 	// so we fix-up all received file descriptors manually.
 	#[cfg(any(target_os = "illumos", target_os = "solaris"))]
@@ -230,17 +232,39 @@ pub fn recv_msg(
 	Ok(size)
 }
 
-#[cfg(any(target_os = "illumos", target_os = "solaris"))]
-fn fixup_cloexec(ancillary: &SocketAncillary) {
-	#[allow(irrefutable_let_patterns)]
+// Post process received FDs.
+//
+// Make sure they are all owned by the SocketAncillary struct,
+// and fix-up the close-on-exec flag on some platforms.
+fn post_process_fds(ancillary: &mut SocketAncillary) {
+	use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+
+	let mut owned_fds = Vec::new();
 	for cmsg in ancillary.messages().filter_map(Result::ok) {
+		#[allow(irrefutable_let_patterns)]
 		if let crate::ancillary::AncillaryData::ScmRights(fds) = cmsg {
 			for fd in fds {
-				let fd = core::mem::ManuallyDrop::new(FileDesc::new(fd));
-				fd.set_close_on_exec(true).ok();
+				#[cfg(any(target_os = "illumos", target_os = "solaris"))]
+				fixup_cloexec(&fd);
+
+				// Safety: the file descriptor comes from a just received ancillary message.
+				// Nobody is owning the file descriptor yet.
+				let fd = unsafe { OwnedFd::from_raw_fd(fd.as_raw_fd()) };
+				owned_fds.push(fd);
 			}
 		}
 	}
+
+	ancillary.owned_fds.append(&mut owned_fds)
+}
+
+#[cfg(any(target_os = "illumos", target_os = "solaris"))]
+fn fixup_cloexec(fd: BorrowedFd<'_>) {
+	use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+	// Safety: the file descriptor is guaranteed to be valid by `BorrowedFd`.
+	// And because the `FileDesc` is wrapped in a `ManuallyDrop`, we never close it here.
+	let fd = core::mem::ManuallyDrop::new(unsafe { FileDesc::from_raw_fd(fd.as_raw_fd()) });
+	fd.set_close_on_exec(true).ok();
 }
 
 fn path_to_sockaddr(path: &Path) -> std::io::Result<(libc::sockaddr_un, usize)> {
