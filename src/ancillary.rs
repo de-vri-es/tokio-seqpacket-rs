@@ -580,6 +580,15 @@ impl<'a> SocketAncillary<'a> {
 		)
 	}
 
+	/// Consume the ancillary message to take ownership of the file descriptors.
+	///
+	/// Note that file descriptors added by [`Self::add_fds()`] are not owned by this struct,
+	/// and are not returned by this function.
+	/// Only file descriptors added by [`Self::add_owned_fds()`] and file descriptors received from the OS are returned.
+	pub fn into_owned_fds(self) -> Vec<OwnedFd> {
+		self.owned_fds
+	}
+
 	/// Clears the ancillary data, removing all values.
 	///
 	/// # Example
