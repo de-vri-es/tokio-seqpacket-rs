@@ -6,8 +6,7 @@
 
 use std::marker::PhantomData;
 use std::mem::{size_of, zeroed};
-use std::os::fd::BorrowedFd;
-use std::os::unix::io::RawFd;
+use std::os::fd::{BorrowedFd, RawFd};
 use std::ptr::read_unaligned;
 use std::slice::from_raw_parts;
 
@@ -221,10 +220,13 @@ impl SocketCred {
 pub struct ScmRights<'a>(AncillaryDataIter<'a, RawFd>);
 
 impl<'a> Iterator for ScmRights<'a> {
-	type Item = RawFd;
+	type Item = BorrowedFd<'a>;
 
-	fn next(&mut self) -> Option<RawFd> {
-		self.0.next()
+	fn next(&mut self) -> Option<BorrowedFd<'a>> {
+		// SAFETY: The raw fd is owned by the SocketAncillary struct.
+		unsafe {
+			Some(BorrowedFd::borrow_raw(self.0.next()?))
+		}
 	}
 }
 
@@ -373,6 +375,7 @@ impl<'a> Iterator for Messages<'a> {
 /// use tokio_seqpacket::UnixSeqpacket;
 /// use tokio_seqpacket::ancillary::{SocketAncillary, AncillaryData};
 /// use std::io::IoSliceMut;
+/// use std::os::fd::AsRawFd;
 ///
 /// #[tokio::main]
 /// async fn main() -> std::io::Result<()> {
@@ -389,7 +392,7 @@ impl<'a> Iterator for Messages<'a> {
 ///     for ancillary_result in ancillary.messages() {
 ///         if let AncillaryData::ScmRights(scm_rights) = ancillary_result.unwrap() {
 ///             for fd in scm_rights {
-///                 println!("receive file descriptor: {fd}");
+///                 println!("received file descriptor: {}", fd.as_raw_fd());
 ///             }
 ///         }
 ///     }
@@ -484,10 +487,11 @@ impl<'a> SocketAncillary<'a> {
 	/// #[tokio::main]
 	/// async fn main() -> std::io::Result<()> {
 	///     let sock = UnixSeqpacket::connect("/tmp/sock").await?;
+	///     let file = std::fs::File::open("/my/file")?;
 	///
 	///     let mut ancillary_buffer = [0; 128];
 	///     let mut ancillary = SocketAncillary::new(&mut ancillary_buffer[..]);
-	///     ancillary.add_fds(&[sock.as_fd()][..]);
+	///     ancillary.add_fds(&[file.as_fd()]);
 	///
 	///     let buf = [1; 8];
 	///     let mut bufs = &mut [IoSlice::new(&buf[..])][..];
@@ -536,6 +540,7 @@ impl<'a> SocketAncillary<'a> {
 	/// use tokio_seqpacket::UnixSeqpacket;
 	/// use tokio_seqpacket::ancillary::{SocketAncillary, AncillaryData};
 	/// use std::io::IoSliceMut;
+	/// use std::os::fd::AsRawFd;
 	///
 	/// #[tokio::main]
 	/// async fn main() -> std::io::Result<()> {
@@ -553,7 +558,7 @@ impl<'a> SocketAncillary<'a> {
 	///     for ancillary_result in ancillary.messages() {
 	///         if let AncillaryData::ScmRights(scm_rights) = ancillary_result.unwrap() {
 	///             for fd in scm_rights {
-	///                 println!("receive file descriptor: {fd}");
+	///                 println!("receive file descriptor: {}", fd.as_raw_fd());
 	///             }
 	///         }
 	///     }
@@ -564,7 +569,7 @@ impl<'a> SocketAncillary<'a> {
 	///     for ancillary_result in ancillary.messages() {
 	///         if let AncillaryData::ScmRights(scm_rights) = ancillary_result.unwrap() {
 	///             for fd in scm_rights {
-	///                 println!("receive file descriptor: {fd}");
+	///                 println!("receive file descriptor: {}", fd.as_raw_fd());
 	///             }
 	///         }
 	///     }
