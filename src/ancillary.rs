@@ -511,6 +511,53 @@ impl<'a> SocketAncillary<'a> {
 		)
 	}
 
+	/// Add owned file descriptors to the ancillary data.
+	///
+	/// The function returns `Ok(())` if there was enough space in the buffer.
+	/// If there was not enough space then no file descriptors was appended and the file descriptors are return in as `Err`.
+	/// Technically, that means this operation adds a control message with the level `SOL_SOCKET`
+	/// and type `SCM_RIGHTS`.
+	///
+	/// # Example
+	///
+	/// ```no_run
+	/// use tokio_seqpacket::UnixSeqpacket;
+	/// use tokio_seqpacket::ancillary::SocketAncillary;
+	/// use std::os::unix::io::AsFd;
+	/// use std::io::IoSlice;
+	///
+	/// #[tokio::main]
+	/// async fn main() -> std::io::Result<()> {
+	///     let sock = UnixSeqpacket::connect("/tmp/sock").await?;
+	///     let file = std::fs::File::open("/my/file")?;
+	///
+	///     let mut ancillary_buffer = [0; 128];
+	///     let mut ancillary = SocketAncillary::new(&mut ancillary_buffer);
+	///     ancillary.add_fds(&[file.as_fd()]);
+	///
+	///     let buf = [1; 8];
+	///     let mut bufs = &mut [IoSlice::new(&buf)];
+	///     sock.send_vectored_with_ancillary(bufs, &mut ancillary).await?;
+	///     Ok(())
+	/// }
+	/// ```
+	pub fn add_owned_fds(&mut self, mut fds: Vec<OwnedFd>) -> Result<(), Vec<OwnedFd>> {
+		self.truncated = false;
+		let added = add_to_ancillary_data(
+			self.buffer,
+			&mut self.length,
+			&fds,
+			libc::SOL_SOCKET,
+			libc::SCM_RIGHTS,
+		);
+		if added {
+			self.owned_fds.append(&mut fds);
+			Ok(())
+		} else {
+			Err(fds)
+		}
+	}
+
 	/// Add credentials to the ancillary data.
 	///
 	/// The function returns `true` if there was enough space in the buffer.
