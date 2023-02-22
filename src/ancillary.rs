@@ -530,7 +530,6 @@ impl<'a> SocketAncillary<'a> {
 	/// ```no_run
 	/// use tokio_seqpacket::UnixSeqpacket;
 	/// use tokio_seqpacket::ancillary::SocketAncillary;
-	/// use std::os::unix::io::AsFd;
 	/// use std::io::IoSlice;
 	///
 	/// #[tokio::main]
@@ -540,7 +539,7 @@ impl<'a> SocketAncillary<'a> {
 	///
 	///     let mut ancillary_buffer = [0; 128];
 	///     let mut ancillary = SocketAncillary::new(&mut ancillary_buffer);
-	///     ancillary.add_fds(&[file.as_fd()]);
+	///     ancillary.add_owned_fds(vec![file.into()]);
 	///
 	///     let buf = [1; 8];
 	///     let mut bufs = &mut [IoSlice::new(&buf)];
