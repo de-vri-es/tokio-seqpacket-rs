@@ -1,6 +1,6 @@
 use assert2::{assert, let_assert};
 use std::os::fd::{AsRawFd, OwnedFd, FromRawFd};
-use tokio_seqpacket::ancillary::SocketAncillary;
+use tokio_seqpacket::ancillary::AncillaryMessageReader;
 
 mod ancillary_fd_helper;
 use ancillary_fd_helper::receive_file_descriptor;
@@ -9,7 +9,7 @@ use ancillary_fd_helper::receive_file_descriptor;
 async fn dropping_ancilarry_drops_owned_fds() {
 	// Receive a file descriptor
 	let mut cmsg = [0; 64];
-	let mut cmsg = SocketAncillary::new(&mut cmsg);
+	let mut cmsg = AncillaryMessageReader::new(&mut cmsg);
 	let fd = receive_file_descriptor(&mut cmsg).await;
 
 	// Remember the raw fd so we can check it gets closed when we drop the `SocketAncillary`.

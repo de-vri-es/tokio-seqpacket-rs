@@ -5,7 +5,7 @@ use std::path::Path;
 use std::task::{Context, Poll};
 use tokio::io::unix::AsyncFd;
 
-use crate::ancillary::SocketAncillary;
+use crate::ancillary::{AncillaryMessageReader, AncillaryMessageWriter};
 use crate::{sys, UCred};
 
 /// Unix seqpacket socket.
@@ -154,7 +154,7 @@ impl UnixSeqpacket {
 	/// Note that unlike [`Self::send_vectored`], only the last task calling this function will be woken up.
 	/// For that reason, it is preferable to use the async functions rather than polling functions when possible.
 	pub fn poll_send_vectored(&self, cx: &mut Context, buffer: &[IoSlice]) -> Poll<std::io::Result<usize>> {
-		self.poll_send_vectored_with_ancillary(cx, buffer, &mut SocketAncillary::new(&mut []))
+		self.poll_send_vectored_with_ancillary(cx, buffer, &mut AncillaryMessageWriter::new(&mut []))
 	}
 
 	/// Try to send data with ancillary data on the socket to the connected peer without blocking.
@@ -167,7 +167,7 @@ impl UnixSeqpacket {
 		&self,
 		cx: &mut Context,
 		buffer: &[IoSlice],
-		ancillary: &mut SocketAncillary,
+		ancillary: &mut AncillaryMessageWriter,
 	) -> Poll<std::io::Result<usize>> {
 		loop {
 			let mut ready_guard = ready!(self.io.poll_write_ready(cx)?);
@@ -200,7 +200,7 @@ impl UnixSeqpacket {
 	/// All calling tasks will try to complete the asynchronous action,
 	/// although the order in which they complete is not guaranteed.
 	pub async fn send_vectored(&self, buffer: &[IoSlice<'_>]) -> std::io::Result<usize> {
-		self.send_vectored_with_ancillary(buffer, &mut SocketAncillary::new(&mut []))
+		self.send_vectored_with_ancillary(buffer, &mut AncillaryMessageWriter::new(&mut []))
 			.await
 	}
 
@@ -212,7 +212,7 @@ impl UnixSeqpacket {
 	pub async fn send_vectored_with_ancillary(
 		&self,
 		buffer: &[IoSlice<'_>],
-		ancillary: &mut SocketAncillary<'_>,
+		ancillary: &mut AncillaryMessageWriter<'_>,
 	) -> std::io::Result<usize> {
 		loop {
 			let mut ready_guard = self.io.writable().await?;
@@ -246,7 +246,7 @@ impl UnixSeqpacket {
 	/// Note that unlike [`Self::recv_vectored`], only the last task calling this function will be woken up.
 	/// For that reason, it is preferable to use the async functions rather than polling functions when possible.
 	pub fn poll_recv_vectored(&self, cx: &mut Context, buffer: &mut [IoSliceMut]) -> Poll<std::io::Result<usize>> {
-		self.poll_recv_vectored_with_ancillary(cx, buffer, &mut SocketAncillary::new(&mut []))
+		self.poll_recv_vectored_with_ancillary(cx, buffer, &mut AncillaryMessageReader::new(&mut []))
 	}
 
 	/// Try to receive data with ancillary data on the socket from the connected peer without blocking.
@@ -266,7 +266,7 @@ impl UnixSeqpacket {
 		&self,
 		cx: &mut Context,
 		buffer: &mut [IoSliceMut],
-		ancillary: &mut SocketAncillary,
+		ancillary: &mut AncillaryMessageReader,
 	) -> Poll<std::io::Result<usize>> {
 		loop {
 			let mut ready_guard = ready!(self.io.poll_read_ready(cx)?);
@@ -299,7 +299,7 @@ impl UnixSeqpacket {
 	/// All calling tasks will try to complete the asynchronous action,
 	/// although the order in which they complete is not guaranteed.
 	pub async fn recv_vectored(&self, buffer: &mut [IoSliceMut<'_>]) -> std::io::Result<usize> {
-		self.recv_vectored_with_ancillary(buffer, &mut SocketAncillary::new(&mut []))
+		self.recv_vectored_with_ancillary(buffer, &mut AncillaryMessageReader::new(&mut []))
 			.await
 	}
 
@@ -318,7 +318,7 @@ impl UnixSeqpacket {
 	pub async fn recv_vectored_with_ancillary(
 		&self,
 		buffer: &mut [IoSliceMut<'_>],
-		ancillary: &mut SocketAncillary<'_>,
+		ancillary: &mut AncillaryMessageReader<'_>,
 	) -> std::io::Result<usize> {
 		loop {
 			let mut ready_guard = self.io.readable().await?;

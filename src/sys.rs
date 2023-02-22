@@ -4,7 +4,7 @@ use std::io::{IoSlice, IoSliceMut};
 use std::os::raw::{c_int, c_void};
 use std::path::{Path, PathBuf};
 
-use crate::ancillary::SocketAncillary;
+use crate::ancillary::{AncillaryMessageReader, AncillaryMessageWriter};
 
 const SOCKET_FLAGS: c_int = libc::SOCK_CLOEXEC | libc::SOCK_NONBLOCK;
 const SOCKET_TYPE: c_int = libc::SOCK_SEQPACKET | SOCKET_FLAGS;
@@ -130,9 +130,7 @@ pub fn send(socket: &FileDesc, buffer: &[u8]) -> std::io::Result<usize> {
 	}
 }
 
-pub fn send_msg(socket: &FileDesc, buffer: &[IoSlice], ancillary: &mut SocketAncillary) -> std::io::Result<usize> {
-	ancillary.truncated = false;
-
+pub fn send_msg(socket: &FileDesc, buffer: &[IoSlice], ancillary: &mut AncillaryMessageWriter) -> std::io::Result<usize> {
 	let control_data = match ancillary.len() {
 		0 => std::ptr::null_mut(),
 		_ => ancillary.buffer.as_mut_ptr() as *mut std::os::raw::c_void,
@@ -182,7 +180,7 @@ pub fn recv(socket: &FileDesc, buffer: &mut [u8]) -> std::io::Result<usize> {
 pub fn recv_msg(
 	socket: &FileDesc,
 	buffer: &mut [IoSliceMut],
-	ancillary: &mut SocketAncillary,
+	ancillary: &mut AncillaryMessageReader,
 ) -> std::io::Result<usize> {
 	let control_data = match ancillary.capacity() {
 		0 => std::ptr::null_mut(),
@@ -223,45 +221,27 @@ pub fn recv_msg(
 		ancillary.length = header.msg_controllen as usize;
 	}
 
+	#[cfg(any(target_os = "illumos", target_os = "solaris"))]
 	post_process_fds(ancillary);
 	Ok(size)
 }
 
-// Post process received FDs.
-//
-// Make sure they are all owned by the SocketAncillary struct,
-// and fix-up the close-on-exec flag on some platforms.
-fn post_process_fds(ancillary: &mut SocketAncillary) {
-	use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+// Illumos and solaris do not support MSG_CMSG_CLOEXEC,
+// so we fix-up all received file descriptors manually.
+#[cfg(any(target_os = "illumos", target_os = "solaris"))]
+fn post_process_fds(ancillary: &mut AncillaryMessageReader) {
+	use std::os::fd::AsRawFd;
 
-	let mut owned_fds = Vec::new();
-	for cmsg in ancillary.messages().filter_map(Result::ok) {
-		#[allow(irrefutable_let_patterns)]
-		if let crate::ancillary::AncillaryData::ScmRights(fds) = cmsg {
+	for cmsg in ancillary.messages() {
+		if let crate::ancillary::AncillaryMessage::FileDescriptors(fds) = cmsg {
 			for fd in fds {
-				// Illumos and solaris do not support MSG_CMSG_CLOEXEC,
-				// so we fix-up all received file descriptors manually.
-				#[cfg(any(target_os = "illumos", target_os = "solaris"))]
-				fixup_cloexec(fd);
-
-				// Safety: the file descriptor comes from a just received ancillary message.
-				// Nobody is owning the file descriptor yet.
-				let fd = unsafe { OwnedFd::from_raw_fd(fd.as_raw_fd()) };
-				owned_fds.push(fd);
+				// Safety: the file descriptor is guaranteed to be valid by `BorrowedFd`.
+				// And because the `FileDesc` is wrapped in a `ManuallyDrop`, we never close it here.
+				let fd = core::mem::ManuallyDrop::new(unsafe { FileDesc::from_raw_fd(fd.as_raw_fd()) });
+				fd.set_close_on_exec(true).ok();
 			}
 		}
 	}
-
-	ancillary.owned_fds.append(&mut owned_fds)
-}
-
-#[cfg(any(target_os = "illumos", target_os = "solaris"))]
-fn fixup_cloexec(fd: std::os::fd::BorrowedFd<'_>) {
-	use std::os::fd::AsRawFd;
-	// Safety: the file descriptor is guaranteed to be valid by `BorrowedFd`.
-	// And because the `FileDesc` is wrapped in a `ManuallyDrop`, we never close it here.
-	let fd = core::mem::ManuallyDrop::new(unsafe { FileDesc::from_raw_fd(fd.as_raw_fd()) });
-	fd.set_close_on_exec(true).ok();
 }
 
 fn path_to_sockaddr(path: &Path) -> std::io::Result<(libc::sockaddr_un, usize)> {
