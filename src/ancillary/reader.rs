@@ -35,7 +35,6 @@ use super::FD_SIZE;
 #[derive(Debug)]
 pub struct AncillaryMessageReader<'a> {
 	pub(crate) buffer: &'a mut [u8],
-	pub(crate) length: usize,
 	pub(crate) truncated: bool,
 }
 
@@ -118,31 +117,24 @@ pub struct UnknownMessage<'a> {
 impl<'a> AncillaryMessageReader<'a> {
 	/// Create an ancillary data with the given buffer.
 	///
-	/// # Example
+	/// # Safety
+	/// The memory buffer must contain valid ancillary messages received from the kernel for a Unix socket.
 	///
-	/// ```no_run
-	/// # #![allow(unused_mut)]
-	/// use tokio_seqpacket::ancillary::AncillaryMessageReader;
-	/// let mut ancillary_buffer = [0; 128];
-	/// let mut ancillary = AncillaryMessageReader::new(&mut ancillary_buffer);
-	/// ```
-	pub fn new(buffer: &'a mut [u8]) -> Self {
-		Self { buffer, length: 0, truncated: false }
+	/// The created reader assumes ownership of objects (such as file descriptors) within the message.
+	/// Because of this, you may only create one ancillary message reader for any ancillary message received from the kernel.
+	/// You must also ensure that no other object assumes ownership of the objects within the message.
+	pub unsafe fn new(buffer: &'a mut [u8], truncated: bool) -> Self {
+		Self { buffer, truncated }
 	}
 
-	/// Returns the capacity of the buffer.
-	pub fn capacity(&self) -> usize {
+	/// Returns the number of used bytes.
+	pub fn len(&self) -> usize {
 		self.buffer.len()
 	}
 
 	/// Returns `true` if the ancillary data is empty.
 	pub fn is_empty(&self) -> bool {
-		self.length == 0
-	}
-
-	/// Returns the number of used bytes.
-	pub fn len(&self) -> usize {
-		self.length
+		self.buffer.is_empty()
 	}
 
 	/// Is `true` if during a recv operation the ancillary message was truncated.
@@ -174,7 +166,7 @@ impl<'a> AncillaryMessageReader<'a> {
 
 	/// Returns the iterator of the control messages.
 	pub fn messages(&self) -> AncillaryMessages<'_> {
-		AncillaryMessages { buffer: &self.buffer[..self.length], current: None }
+		AncillaryMessages { buffer: self.buffer, current: None }
 	}
 
 	/// Consume the ancillary message to take ownership of the file descriptors.
@@ -184,15 +176,14 @@ impl<'a> AncillaryMessageReader<'a> {
 	/// Only file descriptors added by [`Self::add_owned_fds()`] and file descriptors received from the OS are returned.
 	pub fn into_messages(mut self) -> IntoAncillaryMessages<'a> {
 		let buffer = std::mem::take(&mut self.buffer);
-		let length = std::mem::take(&mut self.length);
-		IntoAncillaryMessages { buffer: &mut buffer[..length], current: None }
+		IntoAncillaryMessages { buffer, current: None }
 	}
 }
 
 impl Drop for AncillaryMessageReader<'_> {
 	fn drop(&mut self) {
-		if self.length > 0 {
-			drop(IntoAncillaryMessages { buffer: &mut self.buffer[..self.length], current: None })
+		if !self.is_empty() {
+			drop(IntoAncillaryMessages { buffer: self.buffer, current: None })
 		}
 	}
 }

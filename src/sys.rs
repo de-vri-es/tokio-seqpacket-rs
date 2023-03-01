@@ -182,10 +182,9 @@ pub fn recv_msg<'a>(
 	buffer: &mut [IoSliceMut],
 	ancillary_buffer: &'a mut [u8],
 ) -> std::io::Result<(usize, AncillaryMessageReader<'a>)> {
-	let mut ancillary_reader = AncillaryMessageReader::new(ancillary_buffer);
-	let control_data = match ancillary_reader.capacity() {
+	let control_data = match ancillary_buffer.len() {
 		0 => std::ptr::null_mut(),
-		_ => ancillary_reader.buffer.as_mut_ptr() as *mut std::os::raw::c_void,
+		_ => ancillary_buffer.as_mut_ptr() as *mut std::os::raw::c_void,
 	};
 
 	let mut header: libc::msghdr = unsafe { std::mem::zeroed() };
@@ -202,8 +201,7 @@ pub fn recv_msg<'a>(
 	// This is not a no-op on all platforms.
 	#[allow(clippy::useless_conversion)]
 	{
-		header.msg_controllen = ancillary_reader
-			.capacity()
+		header.msg_controllen = ancillary_buffer.len()
 			.try_into()
 			.map_err(|_| std::io::ErrorKind::InvalidInput)?;
 	}
@@ -215,12 +213,12 @@ pub fn recv_msg<'a>(
 			RECV_MSG_DEFAULT_FLAGS,
 		))?
 	};
-	ancillary_reader.truncated = header.msg_flags & libc::MSG_CTRUNC != 0;
+	let truncated = header.msg_flags & libc::MSG_CTRUNC != 0;
 	// This is not a no-op on all platforms.
 	#[allow(clippy::unnecessary_cast)]
-	{
-		ancillary_reader.length = header.msg_controllen as usize;
-	}
+	let length = header.msg_controllen as usize;
+
+	let ancillary_reader = unsafe { AncillaryMessageReader::new(&mut ancillary_buffer[..length], truncated) };
 
 	#[cfg(any(target_os = "illumos", target_os = "solaris"))]
 	post_process_fds(ancillary);
