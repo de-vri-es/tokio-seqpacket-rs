@@ -17,11 +17,10 @@ use super::FD_SIZE;
 ///
 ///     let mut fds = [0; 8];
 ///     let mut ancillary_buffer = [0; 128];
-///     let mut ancillary = AncillaryMessageReader::new(&mut ancillary_buffer);
 ///
 ///     let mut buf = [1; 8];
 ///     let mut bufs = [IoSliceMut::new(&mut buf)];
-///     sock.recv_vectored_with_ancillary(&mut bufs, &mut ancillary).await?;
+///     let (_read, ancillary) = sock.recv_vectored_with_ancillary(&mut bufs, &mut ancillary_buffer).await?;
 ///
 ///     for message in ancillary.messages() {
 ///         if let AncillaryMessage::FileDescriptors(fds) = message {
@@ -160,11 +159,10 @@ impl<'a> AncillaryMessageReader<'a> {
 	///     let sock = UnixSeqpacket::connect("/tmp/sock").await?;
 	///
 	///     let mut ancillary_buffer = [0; 128];
-	///     let mut ancillary = AncillaryMessageReader::new(&mut ancillary_buffer);
 	///
 	///     let mut buf = [1; 8];
 	///     let mut bufs = &mut [IoSliceMut::new(&mut buf)];
-	///     sock.recv_vectored_with_ancillary(bufs, &mut ancillary).await?;
+	///     let (_read, ancillary) = sock.recv_vectored_with_ancillary(bufs, &mut ancillary_buffer).await?;
 	///
 	///     println!("Is truncated: {}", ancillary.is_truncated());
 	///     Ok(())

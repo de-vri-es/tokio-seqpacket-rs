@@ -1,11 +1,11 @@
 use assert2::{assert, let_assert};
 use std::io::{IoSlice, IoSliceMut, Seek, Write};
-use std::os::fd::{BorrowedFd, AsFd};
+use std::os::fd::AsFd;
 use tempfile::tempfile;
 use tokio_seqpacket::UnixSeqpacket;
-use tokio_seqpacket::ancillary::{AncillaryMessageReader, AncillaryMessageWriter, AncillaryMessage};
+use tokio_seqpacket::ancillary::{AncillaryMessageReader, AncillaryMessageWriter};
 
-pub async fn receive_file_descriptor<'a>(cmsg: &'a mut AncillaryMessageReader<'_>) -> BorrowedFd<'a> {
+pub async fn receive_file_descriptor(ancillary_buf: &mut [u8]) -> AncillaryMessageReader<'_> {
 	let socket_b = {
 		// Make a file to send as attachment.
 		let_assert!(Ok(mut file) = tempfile());
@@ -28,17 +28,8 @@ pub async fn receive_file_descriptor<'a>(cmsg: &'a mut AncillaryMessageReader<'_
 	};
 
 	let mut read_buf = [0u8; 64];
-	assert!(let Ok(29) = socket_b.recv_vectored_with_ancillary(&mut [IoSliceMut::new(&mut read_buf)], cmsg).await);
+	let_assert!(Ok((29, cmsg)) = socket_b.recv_vectored_with_ancillary(&mut [IoSliceMut::new(&mut read_buf)], ancillary_buf).await);
 	assert!(&read_buf[..29] == b"Here, have a file descriptor.");
 
-	// Check that we got exactly one control message containing file descriptors.
-	let mut cmsgs = cmsg.messages();
-	let_assert!(Some(AncillaryMessage::FileDescriptors(mut fds)) = cmsgs.next());
-	assert!(let None = cmsgs.next());
-
-	// Check that we got exactly one file descriptor in the first control message.
-	let_assert!(Some(fd) = fds.next());
-	assert!(let None = fds.next());
-
-	fd
+	cmsg
 }

@@ -177,14 +177,15 @@ pub fn recv(socket: &FileDesc, buffer: &mut [u8]) -> std::io::Result<usize> {
 	}
 }
 
-pub fn recv_msg(
+pub fn recv_msg<'a>(
 	socket: &FileDesc,
 	buffer: &mut [IoSliceMut],
-	ancillary: &mut AncillaryMessageReader,
-) -> std::io::Result<usize> {
-	let control_data = match ancillary.capacity() {
+	ancillary_buffer: &'a mut [u8],
+) -> std::io::Result<(usize, AncillaryMessageReader<'a>)> {
+	let mut ancillary_reader = AncillaryMessageReader::new(ancillary_buffer);
+	let control_data = match ancillary_reader.capacity() {
 		0 => std::ptr::null_mut(),
-		_ => ancillary.buffer.as_mut_ptr() as *mut std::os::raw::c_void,
+		_ => ancillary_reader.buffer.as_mut_ptr() as *mut std::os::raw::c_void,
 	};
 
 	let mut header: libc::msghdr = unsafe { std::mem::zeroed() };
@@ -201,7 +202,7 @@ pub fn recv_msg(
 	// This is not a no-op on all platforms.
 	#[allow(clippy::useless_conversion)]
 	{
-		header.msg_controllen = ancillary
+		header.msg_controllen = ancillary_reader
 			.capacity()
 			.try_into()
 			.map_err(|_| std::io::ErrorKind::InvalidInput)?;
@@ -214,16 +215,16 @@ pub fn recv_msg(
 			RECV_MSG_DEFAULT_FLAGS,
 		))?
 	};
-	ancillary.truncated = header.msg_flags & libc::MSG_CTRUNC != 0;
+	ancillary_reader.truncated = header.msg_flags & libc::MSG_CTRUNC != 0;
 	// This is not a no-op on all platforms.
 	#[allow(clippy::unnecessary_cast)]
 	{
-		ancillary.length = header.msg_controllen as usize;
+		ancillary_reader.length = header.msg_controllen as usize;
 	}
 
 	#[cfg(any(target_os = "illumos", target_os = "solaris"))]
 	post_process_fds(ancillary);
-	Ok(size)
+	Ok((size, ancillary_reader))
 }
 
 // Illumos and solaris do not support MSG_CMSG_CLOEXEC,

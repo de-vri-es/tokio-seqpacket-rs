@@ -8,6 +8,10 @@ use tokio::io::unix::AsyncFd;
 use crate::ancillary::{AncillaryMessageReader, AncillaryMessageWriter};
 use crate::{sys, UCred};
 
+unsafe fn transmute_lifetime<'a, 'b>(input: AncillaryMessageReader<'a>) -> AncillaryMessageReader<'b> {
+	std::mem::transmute(input)
+}
+
 /// Unix seqpacket socket.
 ///
 /// Note that there are no functions to get the local or remote address of the connection.
@@ -246,7 +250,8 @@ impl UnixSeqpacket {
 	/// Note that unlike [`Self::recv_vectored`], only the last task calling this function will be woken up.
 	/// For that reason, it is preferable to use the async functions rather than polling functions when possible.
 	pub fn poll_recv_vectored(&self, cx: &mut Context, buffer: &mut [IoSliceMut]) -> Poll<std::io::Result<usize>> {
-		self.poll_recv_vectored_with_ancillary(cx, buffer, &mut AncillaryMessageReader::new(&mut []))
+		let (read, _ancillary) = ready!(self.poll_recv_vectored_with_ancillary(cx, buffer, &mut []))?;
+		Poll::Ready(Ok(read))
 	}
 
 	/// Try to receive data with ancillary data on the socket from the connected peer without blocking.
@@ -262,19 +267,25 @@ impl UnixSeqpacket {
 	///
 	/// Note that unlike [`Self::recv_vectored_with_ancillary`], only the last task calling this function will be woken up.
 	/// For that reason, it is preferable to use the async functions rather than polling functions when possible.
-	pub fn poll_recv_vectored_with_ancillary(
+	pub fn poll_recv_vectored_with_ancillary<'a>(
 		&self,
 		cx: &mut Context,
 		buffer: &mut [IoSliceMut],
-		ancillary: &mut AncillaryMessageReader,
-	) -> Poll<std::io::Result<usize>> {
+		ancillary_buffer: &'a mut [u8],
+	) -> Poll<std::io::Result<(usize, AncillaryMessageReader<'a>)>> {
 		loop {
 			let mut ready_guard = ready!(self.io.poll_read_ready(cx)?);
 
-			match ready_guard.try_io(|inner| sys::recv_msg(inner.get_ref(), buffer, ancillary)) {
-				Ok(result) => return Poll::Ready(result),
+			let (read, ancillary_reader) = match ready_guard.try_io(|inner| sys::recv_msg(inner.get_ref(), buffer, ancillary_buffer)) {
+				Ok(x) => x?,
 				Err(_would_block) => continue,
-			}
+			};
+
+			// SAFETY: We have to work around a borrow checker bug:
+			// It doesn't know that we return in this branch, so the loop terminates.
+			// It thinks we will do another mutable borrow in the next loop iteration.
+			// TODO: Remove this transmute once the borrow checker is smart enough.
+			return Poll::Ready(Ok((read, unsafe { transmute_lifetime(ancillary_reader) })));
 		}
 	}
 
@@ -299,8 +310,9 @@ impl UnixSeqpacket {
 	/// All calling tasks will try to complete the asynchronous action,
 	/// although the order in which they complete is not guaranteed.
 	pub async fn recv_vectored(&self, buffer: &mut [IoSliceMut<'_>]) -> std::io::Result<usize> {
-		self.recv_vectored_with_ancillary(buffer, &mut AncillaryMessageReader::new(&mut []))
-			.await
+		let (read, _ancillary) = self.recv_vectored_with_ancillary(buffer, &mut [])
+			.await?;
+		Ok(read)
 	}
 
 	/// Receive data with ancillary data on the socket from the connected peer.
@@ -315,18 +327,24 @@ impl UnixSeqpacket {
 	/// This function is safe to call concurrently from different tasks.
 	/// All calling tasks will try to complete the asynchronous action,
 	/// although the order in which they complete is not guaranteed.
-	pub async fn recv_vectored_with_ancillary(
+	pub async fn recv_vectored_with_ancillary<'a>(
 		&self,
 		buffer: &mut [IoSliceMut<'_>],
-		ancillary: &mut AncillaryMessageReader<'_>,
-	) -> std::io::Result<usize> {
+		ancillary_buffer: &'a mut [u8],
+	) -> std::io::Result<(usize, AncillaryMessageReader<'a>)> {
 		loop {
 			let mut ready_guard = self.io.readable().await?;
 
-			match ready_guard.try_io(|inner| sys::recv_msg(inner.get_ref(), buffer, ancillary)) {
-				Ok(result) => return result,
+			let (read, ancillary_reader) = match ready_guard.try_io(|inner| sys::recv_msg(inner.get_ref(), buffer, ancillary_buffer)) {
+				Ok(x) => x?,
 				Err(_would_block) => continue,
-			}
+			};
+
+			// SAFETY: We have to work around a borrow checker bug:
+			// It doesn't know that we return in this branch, so the loop terminates.
+			// It thinks we will do another mutable borrow in the next loop iteration.
+			// TODO: Remove this transmute once the borrow checker is smart enough.
+			return Ok((read, unsafe { transmute_lifetime(ancillary_reader) }));
 		}
 	}
 
