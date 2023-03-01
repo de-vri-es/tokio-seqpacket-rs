@@ -95,7 +95,7 @@ pub struct OwnedFileDescriptors<'a> {
 
 /// A control message containing unix credentials for a process.
 #[derive(Copy, Clone)]
-#[cfg(any(target_os = "linux", target_os = "android", target_os = "netbsd"))]
+#[cfg(any(doc, target_os = "linux", target_os = "android", target_os = "netbsd"))]
 pub struct UnixCredentials<'a> {
 	/// The message data.
 	data: &'a [u8],
@@ -235,10 +235,8 @@ impl<'a> AncillaryMessage<'a> {
 
 			match (cmsg.cmsg_level, cmsg.cmsg_type) {
 				(libc::SOL_SOCKET, libc::SCM_RIGHTS) => Self::FileDescriptors(FileDescriptors { data }),
-				#[cfg(any(target_os = "android", target_os = "linux",))]
-				(libc::SOL_SOCKET, libc::SCM_CREDENTIALS) => Self::Credentials(UnixCredentials { data }),
-				#[cfg(target_os = "netbsd")]
-				(libc::SOL_SOCKET, libc::SCM_CREDS) => Self::Credentials(UnixCredentials { data }),
+				#[cfg(any(target_os = "android", target_os = "linux", target_os = "netbsd"))]
+				(libc::SOL_SOCKET, super::SCM_CREDENTIALS) => Self::Credentials(UnixCredentials { data }),
 				(cmsg_level, cmsg_type) => Self::Other(UnknownMessage { cmsg_level, cmsg_type, data }),
 			}
 		}
@@ -300,10 +298,8 @@ impl<'a> OwnedAncillaryMessage<'a> {
 
 			match (cmsg.cmsg_level, cmsg.cmsg_type) {
 				(libc::SOL_SOCKET, libc::SCM_RIGHTS) => Self::FileDescriptors(OwnedFileDescriptors { data, position: 0 }),
-				#[cfg(any(target_os = "android", target_os = "linux",))]
-				(libc::SOL_SOCKET, libc::SCM_CREDENTIALS) => Self::Credentials(UnixCredentials { data }),
-				#[cfg(target_os = "netbsd")]
-				(libc::SOL_SOCKET, libc::SCM_CREDS) => Self::Credentials(UnixCredentials { data }),
+				#[cfg(any(target_os = "android", target_os = "linux", target_os = "netbsd"))]
+				(libc::SOL_SOCKET, super::SCM_CREDENTIALS) => Self::Credentials(UnixCredentials { data }),
 				(cmsg_level, cmsg_type) => Self::Other(UnknownMessage { cmsg_level, cmsg_type, data }),
 			}
 		}
@@ -430,12 +426,13 @@ impl<'a> std::iter::ExactSizeIterator for OwnedFileDescriptors<'a> {
 #[cfg(any(target_os = "linux", target_os = "android", target_os = "netbsd"))]
 mod unix_creds_impl {
 	use super::UnixCredentials;
-	use super::super::{SocketCred, CREDS_SIZE };
+	use super::super::RawScmCreds;
+	use crate::UCred;
 
 	impl UnixCredentials<'_> {
 		/// Get the number of credentials in the message.
 		pub fn len(&self) -> usize {
-			self.data.len() / CREDS_SIZE
+			self.data.len() / std::mem::size_of::<RawScmCreds>()
 		}
 
 		/// Check if the message is empty (contains no credentials).
@@ -444,25 +441,26 @@ mod unix_creds_impl {
 		}
 
 		/// Get the credentials at a specific index.
-		pub fn get(&self, index: usize) -> Option<SocketCred> {
+		pub fn get(&self, index: usize) -> Option<UCred> {
 			if index >= self.len() {
 				None
 			} else {
 				// SAFETY: The memory is valid, and the kernel guaranteed it is a credentials struct.
 				// It probably also guarantees alignment, but just in case not, use read_unaligned.
-				unsafe {
-					Some(std::ptr::read_unaligned(self.data[index * CREDS_SIZE..].as_ptr().cast()))
-				}
+				let raw: RawScmCreds = unsafe {
+					std::ptr::read_unaligned(self.data.as_ptr().cast::<RawScmCreds>().add(index))
+				};
+				Some(UCred::from_scm_creds(raw))
 			}
 		}
 	}
 
 	impl Iterator for UnixCredentials<'_> {
-		type Item = SocketCred;
+		type Item = UCred;
 
 		fn next(&mut self) -> Option<Self::Item> {
 			let fd = self.get(0)?;
-			self.data = &self.data[CREDS_SIZE..];
+			self.data = &self.data[std::mem::size_of::<RawScmCreds>()..];
 			Some(fd)
 		}
 

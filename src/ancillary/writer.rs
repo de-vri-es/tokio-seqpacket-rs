@@ -115,7 +115,7 @@ impl<'a> AncillaryMessageWriter<'a> {
 		Ok(())
 	}
 
-	/// Add credentials to the ancillary data.
+	/// Add Unix credentials to the ancillary data.
 	///
 	/// The function returns `Ok(())` if there is enough space in the buffer.
 	/// If there is not enough space, then no credentials are appended.
@@ -123,24 +123,22 @@ impl<'a> AncillaryMessageWriter<'a> {
 	/// This function adds a single control message with level `SOL_SOCKET` and type `SCM_CREDENTIALS` on most platforms.
 	/// On NetBSD the message has type `SCM_CREDS`.
 	#[cfg(any(doc, target_os = "android", target_os = "linux", target_os = "netbsd",))]
-	pub fn add_creds(&mut self, creds: &[super::SocketCred]) -> Result<(), AddControlMessageError> {
-		#[cfg(not(target_os = "netbsd"))]
-		let cmsg_type = libc::SCM_CREDENTIALS;
-		#[cfg(target_os = "netbsd")]
-		let cmsg_type = libc::SCM_CREDS;
+	pub fn add_ucreds(&mut self, credentials: &[crate::UCred]) -> Result<(), AddControlMessageError> {
+		use super::RawScmCreds;
 
-		let byte_len = creds.len() * super::CREDS_SIZE;
-		let buffer = reserve_ancillary_data(self.buffer, &mut self.length, byte_len, libc::SOL_SOCKET, cmsg_type)?;
+		const ELEM_SIZE: usize = std::mem::size_of::<RawScmCreds>();
 
-		// SAFETY: The pointers are guaranteed valid and non-overlapping,
-		// since they come from distinct &mut self and &[SocketCred] references.
-		// The buffer is guaranteed to be large enough by `reserve_ancillary_data`.
-		unsafe {
-			std::ptr::copy_nonoverlapping(
-				creds.as_ptr().cast(),
-				buffer.as_mut_ptr(),
-				byte_len,
-			);
+		let byte_len = credentials.len() * ELEM_SIZE;
+		let buffer = reserve_ancillary_data(self.buffer, &mut self.length, byte_len, libc::SOL_SOCKET, super::SCM_CREDENTIALS)?;
+
+		for (i, cred) in credentials.iter().enumerate() {
+			let raw = &cred.to_scm_creds();
+			// SAFETY: The pointers are guaranteed valid and non-overlapping,
+			// since they come from distinct &mut self and &[SocketCred] references.
+			// The buffer is guaranteed to be large enough by `reserve_ancillary_data`.
+			unsafe {
+				std::ptr::copy_nonoverlapping(raw as *const _ as *const u8, buffer[i * ELEM_SIZE..].as_mut_ptr(), ELEM_SIZE);
+			}
 		}
 		Ok(())
 	}

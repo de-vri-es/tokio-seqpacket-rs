@@ -1,3 +1,7 @@
+main:
+  * Rework ancillary message API.
+  * Support I/O safety in ancillary message API.
+
 v0.5.6 - 2022-11-30:
   * Implement `AsFd` for `UnixSeqpacket` and `UnixSeqpacketListener`.
   * Implement `TryFrom<OwnedFd>` for `UnixSeqpacket` and `UnixSeqpacketListener`.

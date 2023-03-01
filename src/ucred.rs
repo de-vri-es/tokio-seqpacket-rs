@@ -4,12 +4,12 @@ use std::os::unix::io::AsRawFd;
 /// Credentials of a process
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct UCred {
-	/// PID (process ID) of the process
-	pid: Option<pid_t>,
 	/// UID (user ID) of the process
 	uid: uid_t,
 	/// GID (group ID) of the process
 	gid: gid_t,
+	/// PID (process ID) of the process
+	pid: pid_t,
 }
 
 impl UCred {
@@ -33,7 +33,51 @@ impl UCred {
 	/// This is only implemented under Linux, Android, iOS, macOS, Solaris and
 	/// Illumos. On other plaforms this will always return `None`.
 	pub fn pid(&self) -> Option<pid_t> {
-		self.pid
+		if self.pid == 0 {
+			None
+		} else {
+			Some(self.pid)
+		}
+	}
+
+	#[cfg(any(target_os = "linux", target_os = "android"))]
+	pub(crate) fn from_scm_creds(raw: crate::ancillary::RawScmCreds) -> UCred {
+		UCred {
+			uid: raw.uid,
+			gid: raw.gid,
+			pid: raw.pid,
+		}
+	}
+
+	#[cfg(target_os = "netbsd")]
+	pub(crate) fn from_scm_creds(raw: crate::ancillary::RawScmCreds) -> UCred {
+		UCred {
+			uid: raw.sc_uid,
+			gid: raw.sc_gid,
+			pid: raw.sc_pid,
+		}
+	}
+
+	#[cfg(any(target_os = "linux", target_os = "android"))]
+	pub(crate) fn to_scm_creds(self) -> crate::ancillary::RawScmCreds {
+		crate::ancillary::RawScmCreds {
+			uid: self.uid,
+			gid: self.gid,
+			pid: self.pid,
+		}
+	}
+
+	#[cfg(target_os = "netbsd")]
+	pub(crate) fn to_scm_creds(self) -> crate::ancillary::RawScmCreds {
+		crate::ancillary::RawScmCreds {
+			sc_uid: self.uid,
+			sc_gid: self.gid,
+			sc_pid: self.pid,
+			sc_euid: self.uid,
+			sc_egid: self.gid,
+			sc_ngroups: 0,
+			sc_groups: [],
+		}
 	}
 }
 
@@ -61,7 +105,7 @@ fn get_peer_cred<T: AsRawFd>(sock: &T) -> std::io::Result<UCred> {
 		Ok(UCred {
 			uid: ucred.uid,
 			gid: ucred.gid,
-			pid: Some(ucred.pid),
+			pid: ucred.pid,
 		})
 	} else {
 		Err(std::io::Error::last_os_error())
@@ -83,7 +127,7 @@ fn get_peer_cred<T: AsRawFd>(sock: &T) -> std::io::Result<UCred> {
 	let ret = unsafe { libc::getpeereid(raw_fd, &mut uid, &mut gid) };
 
 	if ret == 0 {
-		Ok(UCred { uid, gid, pid: None })
+		Ok(UCred { uid, gid, pid: 0 })
 	} else {
 		Err(std::io::Error::last_os_error())
 	}
@@ -117,7 +161,7 @@ fn get_peer_cred<T: AsRawFd>(sock: &T) -> std::io::Result<UCred> {
 		Ok(UCred {
 			uid,
 			gid,
-			pid: Some(pid),
+			pid,
 		})
 	} else {
 		Err(std::io::Error::last_os_error())
@@ -141,7 +185,7 @@ fn get_peer_cred<T: AsRawFd>(sock: &T) -> std::io::Result<UCred> {
 			Ok(UCred {
 				uid,
 				gid,
-				pid: Some(pid),
+				pid,
 			})
 		} else {
 			Err(std::io::Error::last_os_error())
