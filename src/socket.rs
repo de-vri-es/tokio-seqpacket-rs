@@ -39,6 +39,12 @@ impl TryFrom<OwnedFd> for UnixSeqpacket {
 	}
 }
 
+impl From<UnixSeqpacket> for OwnedFd {
+	fn from(socket: UnixSeqpacket) -> Self {
+		socket.io.into_inner().into_fd()
+	}
+}
+
 impl UnixSeqpacket {
 	pub(crate) fn new(socket: FileDesc) -> std::io::Result<Self> {
 		let io = AsyncFd::new(socket)?;
