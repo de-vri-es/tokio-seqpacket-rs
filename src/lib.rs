@@ -52,6 +52,7 @@ macro_rules! ready {
 }
 
 pub mod ancillary;
+pub mod borrow_fd;
 mod listener;
 mod socket;
 mod sys;

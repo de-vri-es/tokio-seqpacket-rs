@@ -4,7 +4,7 @@ use std::io::{IoSlice, IoSliceMut};
 use std::os::raw::{c_int, c_void};
 use std::path::{Path, PathBuf};
 
-use crate::ancillary::SocketAncillary;
+use crate::ancillary::{AncillaryMessageReader, AncillaryMessageWriter};
 
 const SOCKET_FLAGS: c_int = libc::SOCK_CLOEXEC | libc::SOCK_NONBLOCK;
 const SOCKET_TYPE: c_int = libc::SOCK_SEQPACKET | SOCKET_FLAGS;
@@ -130,9 +130,7 @@ pub fn send(socket: &FileDesc, buffer: &[u8]) -> std::io::Result<usize> {
 	}
 }
 
-pub fn send_msg(socket: &FileDesc, buffer: &[IoSlice], ancillary: &mut SocketAncillary) -> std::io::Result<usize> {
-	ancillary.truncated = false;
-
+pub fn send_msg(socket: &FileDesc, buffer: &[IoSlice], ancillary: &mut AncillaryMessageWriter) -> std::io::Result<usize> {
 	let control_data = match ancillary.len() {
 		0 => std::ptr::null_mut(),
 		_ => ancillary.buffer.as_mut_ptr() as *mut std::os::raw::c_void,
@@ -179,14 +177,14 @@ pub fn recv(socket: &FileDesc, buffer: &mut [u8]) -> std::io::Result<usize> {
 	}
 }
 
-pub fn recv_msg(
+pub fn recv_msg<'a>(
 	socket: &FileDesc,
 	buffer: &mut [IoSliceMut],
-	ancillary: &mut SocketAncillary,
-) -> std::io::Result<usize> {
-	let control_data = match ancillary.capacity() {
+	ancillary_buffer: &'a mut [u8],
+) -> std::io::Result<(usize, AncillaryMessageReader<'a>)> {
+	let control_data = match ancillary_buffer.len() {
 		0 => std::ptr::null_mut(),
-		_ => ancillary.buffer.as_mut_ptr() as *mut std::os::raw::c_void,
+		_ => ancillary_buffer.as_mut_ptr() as *mut std::os::raw::c_void,
 	};
 
 	let mut header: libc::msghdr = unsafe { std::mem::zeroed() };
@@ -203,8 +201,7 @@ pub fn recv_msg(
 	// This is not a no-op on all platforms.
 	#[allow(clippy::useless_conversion)]
 	{
-		header.msg_controllen = ancillary
-			.capacity()
+		header.msg_controllen = ancillary_buffer.len()
 			.try_into()
 			.map_err(|_| std::io::ErrorKind::InvalidInput)?;
 	}
@@ -216,24 +213,30 @@ pub fn recv_msg(
 			RECV_MSG_DEFAULT_FLAGS,
 		))?
 	};
-	ancillary.truncated = header.msg_flags & libc::MSG_CTRUNC != 0;
-	ancillary.length = header.msg_controllen as usize;
+	let truncated = header.msg_flags & libc::MSG_CTRUNC != 0;
+	// This is not a no-op on all platforms.
+	#[allow(clippy::unnecessary_cast)]
+	let length = header.msg_controllen as usize;
 
-	// Illumos and solaris do not support MSG_CMSG_CLOEXEC,
-	// so we fix-up all received file descriptors manually.
+	let ancillary_reader = unsafe { AncillaryMessageReader::new(&mut ancillary_buffer[..length], truncated) };
+
 	#[cfg(any(target_os = "illumos", target_os = "solaris"))]
-	fixup_cloexec(&ancillary);
-
-	Ok(size)
+	post_process_fds(ancillary);
+	Ok((size, ancillary_reader))
 }
 
+// Illumos and solaris do not support MSG_CMSG_CLOEXEC,
+// so we fix-up all received file descriptors manually.
 #[cfg(any(target_os = "illumos", target_os = "solaris"))]
-fn fixup_cloexec(ancillary: &SocketAncillary) {
-	#[allow(irrefutable_let_patterns)]
-	for cmsg in ancillary.messages().filter_map(Result::ok) {
-		if let crate::ancillary::AncillaryData::ScmRights(fds) = cmsg {
+fn post_process_fds(ancillary: &mut AncillaryMessageReader) {
+	use std::os::fd::AsRawFd;
+
+	for cmsg in ancillary.messages() {
+		if let crate::ancillary::AncillaryMessage::FileDescriptors(fds) = cmsg {
 			for fd in fds {
-				let fd = core::mem::ManuallyDrop::new(FileDesc::new(fd));
+				// Safety: the file descriptor is guaranteed to be valid by `BorrowedFd`.
+				// And because the `FileDesc` is wrapped in a `ManuallyDrop`, we never close it here.
+				let fd = core::mem::ManuallyDrop::new(unsafe { FileDesc::from_raw_fd(fd.as_raw_fd()) });
 				fd.set_close_on_exec(true).ok();
 			}
 		}
