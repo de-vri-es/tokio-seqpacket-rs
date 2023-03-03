@@ -39,8 +39,8 @@ async fn can_take_ownership_of_received_fds() {
 	let_assert!(Some(OwnedAncillaryMessage::FileDescriptors(mut fds)) = messages.next());
 	let_assert!(None = messages.next());
 	assert!(fds.len() == 1);
-	let_assert!(Some(fd) = fds.take_ownership(0));
-	let_assert!(None = fds.take_ownership(0));
+	let_assert!(Some(fd) = fds.next());
+	let_assert!(None = fds.next());
 
 	// Check that we can retrieve the message from the attached file.
 	let mut file = std::fs::File::from(fd);

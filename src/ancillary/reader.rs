@@ -90,7 +90,6 @@ pub struct FileDescriptors<'a> {
 pub struct OwnedFileDescriptors<'a> {
 	/// The message data.
 	data: &'a mut [u8],
-	position: usize,
 }
 
 /// A control message containing unix credentials for a process.
@@ -293,7 +292,7 @@ impl<'a> OwnedAncillaryMessage<'a> {
 			let data = std::slice::from_raw_parts_mut(data, data_len);
 
 			match (cmsg.cmsg_level, cmsg.cmsg_type) {
-				(libc::SOL_SOCKET, libc::SCM_RIGHTS) => Self::FileDescriptors(OwnedFileDescriptors { data, position: 0 }),
+				(libc::SOL_SOCKET, libc::SCM_RIGHTS) => Self::FileDescriptors(OwnedFileDescriptors { data }),
 				#[cfg(any(target_os = "android", target_os = "linux", target_os = "netbsd"))]
 				(libc::SOL_SOCKET, super::SCM_CREDENTIALS) => Self::Credentials(UnixCredentials { data }),
 				(cmsg_level, cmsg_type) => Self::Other(UnknownMessage { cmsg_level, cmsg_type, data }),
@@ -352,7 +351,7 @@ impl<'a> std::iter::ExactSizeIterator for FileDescriptors<'a> {
 impl<'a> OwnedFileDescriptors<'a> {
 	/// Get the number of file descriptors in the message.
 	pub fn len(&self) -> usize {
-		self.data[self.position..].len() / FD_SIZE
+		self.data.len() / FD_SIZE
 	}
 
 	/// Check if the message is empty (contains no file descriptors).
@@ -360,29 +359,10 @@ impl<'a> OwnedFileDescriptors<'a> {
 		self.len() == 0
 	}
 
-	/// Take ownership of a specific file descriptor in the message.
-	///
-	/// Returns `None` if ownership of the file descriptor has already been taken,
-	/// or if the index is out of bounds.
-	pub fn take_ownership(&mut self, index: usize) -> Option<OwnedFd> {
-		if index >= self.len() {
-			None
-		} else {
-			// SAFETY: The memory is valid, and the kernel guaranteed it is a file descriptor.
-			// Additionally, the returned lifetime is linked to the `AncillaryMessageReader` which owns the file descriptor.
-			// And we overwrite the original value with -1 before returning the owned fd to ensure we don't try to own it multiple times.
-			unsafe {
-				use std::os::fd::{FromRawFd, RawFd};
-				let ptr = self.data[index * FD_SIZE..].as_mut_ptr().cast();
-				let raw_fd: RawFd = std::ptr::read_unaligned(ptr);
-				if raw_fd == -1 {
-					None
-				} else {
-					std::ptr::write_unaligned(ptr, -1);
-					Some(OwnedFd::from_raw_fd(raw_fd))
-				}
-			}
-		}
+	/// Advance the iterator.
+	fn advance(&mut self) {
+		let data = std::mem::take(&mut self.data);
+		self.data = &mut data[FD_SIZE..];
 	}
 }
 
@@ -390,14 +370,19 @@ impl<'a> Iterator for OwnedFileDescriptors<'a> {
 	type Item = OwnedFd;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		while !Self::is_empty(self) {
-			let fd = self.take_ownership(self.position);
-			self.position += 1;
-			if let Some(fd) = fd {
-				return Some(fd)
+		if Self::is_empty(self) {
+			None
+		} else {
+			// SAFETY: The memory is valid, and the kernel guaranteed it is a file descriptor.
+			// Additionally, the returned lifetime is linked to the `AncillaryMessageReader` which owns the file descriptor.
+			// And we overwrite the original value with -1 before returning the owned fd to ensure we don't try to own it multiple times.
+			unsafe {
+				use std::os::fd::{FromRawFd, RawFd};
+				let raw_fd: RawFd = std::ptr::read_unaligned(self.data.as_mut_ptr().cast());
+				self.advance();
+				Some(OwnedFd::from_raw_fd(raw_fd))
 			}
 		}
-		None
 	}
 
 	fn size_hint(&self) -> (usize, Option<usize>) {
