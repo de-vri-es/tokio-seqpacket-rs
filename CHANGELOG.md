@@ -1,4 +1,4 @@
-main:
+v0.7.0 - 2023-03-03:
   * Fix `OwnedFileDescriptors` iteration.
 
 v0.6.0 - 2023-03-03 - YANKED:
