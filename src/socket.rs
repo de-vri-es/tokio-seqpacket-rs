@@ -8,10 +8,6 @@ use tokio::io::unix::AsyncFd;
 use crate::ancillary::{AncillaryMessageReader, AncillaryMessageWriter};
 use crate::{sys, UCred};
 
-unsafe fn transmute_lifetime<'a, 'b>(input: AncillaryMessageReader<'a>) -> AncillaryMessageReader<'b> {
-	std::mem::transmute(input)
-}
-
 /// Unix seqpacket socket.
 ///
 /// Note that there are no functions to get the local or remote address of the connection.
@@ -368,4 +364,15 @@ impl IntoRawFd for UnixSeqpacket {
 	fn into_raw_fd(self) -> std::os::unix::io::RawFd {
 		self.into_raw_fd()
 	}
+}
+
+/// Transmute the lifetime of a `AncillaryMessageReader`.
+///
+/// Exists to ensure we do not accidentally transmute more than we intend to.
+///
+/// # Safety
+/// All the safety requirements of [`std::mem::transmute`] should be uphold.
+#[allow(clippy::needless_lifetimes)]
+unsafe fn transmute_lifetime<'a, 'b>(input: AncillaryMessageReader<'a>) -> AncillaryMessageReader<'b> {
+	std::mem::transmute(input)
 }
