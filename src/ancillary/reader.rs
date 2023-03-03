@@ -169,11 +169,7 @@ impl<'a> AncillaryMessageReader<'a> {
 		AncillaryMessages { buffer: self.buffer, current: None }
 	}
 
-	/// Consume the ancillary message to take ownership of the file descriptors.
-	///
-	/// Note that file descriptors added by [`Self::add_fds()`] are not owned by this struct,
-	/// and are not returned by this function.
-	/// Only file descriptors added by [`Self::add_owned_fds()`] and file descriptors received from the OS are returned.
+	/// Consume the ancillary message to take ownership of the contained objects (such as file descriptors).
 	pub fn into_messages(mut self) -> IntoAncillaryMessages<'a> {
 		let buffer = std::mem::take(&mut self.buffer);
 		IntoAncillaryMessages { buffer, current: None }
