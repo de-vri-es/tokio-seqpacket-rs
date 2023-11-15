@@ -218,17 +218,17 @@ pub fn recv_msg<'a>(
 	#[allow(clippy::unnecessary_cast)]
 	let length = header.msg_controllen as usize;
 
-	let mut ancillary_reader = unsafe { AncillaryMessageReader::new(&mut ancillary_buffer[..length], truncated) };
+	let ancillary_reader = unsafe { AncillaryMessageReader::new(&mut ancillary_buffer[..length], truncated) };
 
 	#[cfg(any(target_os = "illumos", target_os = "solaris"))]
-	post_process_fds(&mut ancillary_reader);
+	post_process_fds(&ancillary_reader);
 	Ok((size, ancillary_reader))
 }
 
 // Illumos and solaris do not support MSG_CMSG_CLOEXEC,
 // so we fix-up all received file descriptors manually.
 #[cfg(any(target_os = "illumos", target_os = "solaris"))]
-fn post_process_fds(ancillary: &mut AncillaryMessageReader) {
+fn post_process_fds(ancillary: &AncillaryMessageReader) {
 	use std::os::fd::AsRawFd;
 
 	for cmsg in ancillary.messages() {
