@@ -218,10 +218,10 @@ pub fn recv_msg<'a>(
 	#[allow(clippy::unnecessary_cast)]
 	let length = header.msg_controllen as usize;
 
-	let ancillary_reader = unsafe { AncillaryMessageReader::new(&mut ancillary_buffer[..length], truncated) };
+	let mut ancillary_reader = unsafe { AncillaryMessageReader::new(&mut ancillary_buffer[..length], truncated) };
 
 	#[cfg(any(target_os = "illumos", target_os = "solaris"))]
-	post_process_fds(ancillary);
+	post_process_fds(&mut ancillary_reader);
 	Ok((size, ancillary_reader))
 }
 
