@@ -1,11 +1,11 @@
-Unreleased:
+v0.7.1 - 2023-11-15:
   * Ensure proper alginment of control message buffer in the writer.
   * Fix compilation on Illumos and Solaris platforms.
 
 v0.7.0 - 2023-03-03:
   * Fix `OwnedFileDescriptors` iteration.
 
-v0.6.0 - 2023-03-03 - YANKED:
+v0.6.0 - 2023-03-03:
   * Rework ancillary message API.
   * Support I/O safety in ancillary message API.
   * Implement `Into<OwnedFd>` for `UnixSeqpacket` and `UnixSeqpacketListener`.
