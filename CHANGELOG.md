@@ -1,3 +1,6 @@
+Unreleased:
+  * Ensure proper alginment of control message buffer in the writer.
+
 v0.7.0 - 2023-03-03:
   * Fix `OwnedFileDescriptors` iteration.
 

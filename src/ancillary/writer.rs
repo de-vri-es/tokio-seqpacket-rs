@@ -40,7 +40,13 @@ pub struct AncillaryMessageWriter<'a> {
 pub struct AddControlMessageError(());
 
 impl<'a> AncillaryMessageWriter<'a> {
+	/// Alignment requirement for the control messages added to the buffer.
+	pub const BUFFER_ALIGN: usize = std::mem::align_of::<libc::cmsghdr>();
+
 	/// Create an ancillary data with the given buffer.
+	///
+	/// Some bytes at the start of the buffer may be left unused to enforce alignment to [`Self::BUFFER_ALIGN`].
+	/// You can use [`Self::capacity()`] to check how much of the buffer can be used for control messages.
 	///
 	/// # Example
 	///
@@ -51,6 +57,7 @@ impl<'a> AncillaryMessageWriter<'a> {
 	/// let mut ancillary = AncillaryMessageWriter::new(&mut ancillary_buffer);
 	/// ```
 	pub fn new(buffer: &'a mut [u8]) -> Self {
+		let buffer = align_buffer_mut(buffer, Self::BUFFER_ALIGN);
 		Self { buffer, length: 0 }
 	}
 
@@ -225,5 +232,15 @@ fn reserve_ancillary_data<'a>(
 
 		let data = libc::CMSG_DATA(previous_cmsg).cast();
 		Ok(std::slice::from_raw_parts_mut(data, additional_space))
+	}
+}
+
+/// Align a buffer to the given alignment.
+fn align_buffer_mut(buffer: &mut [u8], align: usize) -> &mut [u8] {
+	let offset = buffer.as_ptr().align_offset(align);
+	if offset > buffer.len() {
+		&mut []
+	} else {
+		&mut buffer[offset..]
 	}
 }

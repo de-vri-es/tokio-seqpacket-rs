@@ -267,7 +267,7 @@ fn path_to_sockaddr(path: &Path) -> std::io::Result<(libc::sockaddr_un, usize)> 
 
 /// Get the Unix path of a socket address.
 ///
-/// An error is retuend if the address is not a Unix address, or if it is an unnamed or abstract.
+/// An error is returned if the address is not a Unix address, or if it is an unnamed or abstract.
 fn sockaddr_to_path(address: &libc::sockaddr_un, len: libc::socklen_t) -> std::io::Result<&std::path::Path> {
 	use std::ffi::OsStr;
 	use std::os::unix::ffi::OsStrExt;
