@@ -261,7 +261,13 @@ fn path_to_sockaddr(path: &Path) -> std::io::Result<(libc::sockaddr_un, usize)> 
 		core::ptr::copy_nonoverlapping(path.as_ptr(), sockaddr.sun_path.as_mut_ptr() as *mut u8, path.len());
 		sockaddr.sun_path[path.len()] = 0;
 		let path_offset = sockaddr.sun_path.as_ptr() as usize - (&sockaddr as *const _ as usize);
-		Ok((sockaddr, path_offset + path.len() + 1))
+		let length_addendum = if path.get(0) == Some(&0) {
+			// do not add trailing zero byte to abstract UNIX socket paths on Linux
+			0
+		} else {
+			1
+		};
+		Ok((sockaddr, path_offset + path.len() + length_addendum))
 	}
 }
 
