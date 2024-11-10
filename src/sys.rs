@@ -261,7 +261,13 @@ fn path_to_sockaddr(path: &Path) -> std::io::Result<(libc::sockaddr_un, usize)> 
 		core::ptr::copy_nonoverlapping(path.as_ptr(), sockaddr.sun_path.as_mut_ptr() as *mut u8, path.len());
 		sockaddr.sun_path[path.len()] = 0;
 		let path_offset = sockaddr.sun_path.as_ptr() as usize - (&sockaddr as *const _ as usize);
-		Ok((sockaddr, path_offset + path.len() + 1))
+
+		// Do not add trailing zero byte to abstract UNIX socket paths on Linux and Android.
+		if cfg!(any(target_os = "linux", target_os = "android")) && path.first() == Some(&0) {
+			Ok((sockaddr, path_offset + path.len()))
+		} else {
+			Ok((sockaddr, path_offset + path.len() + 1))
+		}
 	}
 }
 
@@ -284,13 +290,13 @@ fn sockaddr_to_path(address: &libc::sockaddr_un, len: libc::socklen_t) -> std::i
 			let offset = sun_path.offset_from(address as *const _ as *const u8);
 			let path = core::slice::from_raw_parts(sun_path, len as usize - offset as usize);
 
-			// Some platforms include a trailing null byte in the path length.
-			let path = if path.last() == Some(&0) {
-				&path[..path.len() - 1]
+			// Do not strip trailing zero byte from abstract UNIX socket paths on Linux and Android.
+			if cfg!(any(target_os = "linux", target_os = "android")) && path.first() == Some(&0) {
+				Ok(Path::new(OsStr::from_bytes(path)))
 			} else {
-				path
-			};
-			Ok(Path::new(OsStr::from_bytes(path)))
+				let path = path.strip_suffix(&[0]).unwrap_or(path);
+				Ok(Path::new(OsStr::from_bytes(path)))
+			}
 		}
 	}
 }
