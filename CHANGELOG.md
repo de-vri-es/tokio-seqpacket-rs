@@ -1,3 +1,7 @@
+main:
+  * Do not add a trailing null byte to abstract namespace socket paths on Linux and Android in `bind()` and `connect()`.
+  * Do not strip a traling null byte from abstract namespace socket paths on Linux and Android in `local_addr()`.
+
 v0.7.1 - 2023-11-15:
   * Ensure proper alginment of control message buffer in the writer.
   * Fix compilation on Illumos and Solaris platforms.
