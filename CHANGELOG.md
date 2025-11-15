@@ -1,5 +1,5 @@
-Unreleased - ReleaseDate:
-  * Always preserve record boundaries when sending on a `UnixSeqpacket` socket.
+v0.8.1 - 2025-11-15:
+  * Always set the `MSG_EOR` flag when sending on a `UnixSeqpacket` socket (needed for FreeBSD 15 and up).
 
 v0.8.0 - 2024-11-10:
   * Do not add a trailing null byte to abstract namespace socket paths on Linux and Android in `bind()` and `connect()`.
