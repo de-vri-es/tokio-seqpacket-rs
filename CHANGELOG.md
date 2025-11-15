@@ -1,3 +1,6 @@
+Unreleased - ReleaseDate:
+  * Always preserve record boundaries when sending on a `UnixSeqpacket` socket.
+
 v0.8.0 - 2024-11-10:
   * Do not add a trailing null byte to abstract namespace socket paths on Linux and Android in `bind()` and `connect()`.
   * Do not strip a traling null byte from abstract namespace socket paths on Linux and Android in `local_addr()`.

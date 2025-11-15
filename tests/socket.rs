@@ -12,6 +12,22 @@ async fn send_recv() {
 	assert!(&buffer[..12] == b"Hello world!");
 }
 
+/// Record boundaries should be preserved
+#[tokio::test]
+async fn record_boundaries() {
+	let_assert!(Ok((a, b)) = UnixSeqpacket::pair());
+	assert!(let Ok(12) = a.send(b"Hello world!").await);
+	assert!(let Ok(12) = a.send(b"Byebye world").await);
+
+	// Having sent two messages, we recv should return twice, with only a single message each
+	// time.
+	let mut buffer = [0u8; 128];
+	assert!(let Ok(12) = b.recv(&mut buffer).await);
+	assert!(&buffer[..12] == b"Hello world!");
+	assert!(let Ok(12) = b.recv(&mut buffer).await);
+	assert!(&buffer[..12] == b"Byebye world");
+}
+
 /// Test a send and receive call where the send wakes the recv task.
 #[test]
 fn send_recv_out_of_order() {

@@ -1,8 +1,17 @@
-freebsd_instance:
-  image: freebsd-13-4-release-amd64
-
 task:
-  name: FreeBSD (stable)
+  matrix:
+    - name: FreeBSD 16 amd64
+      freebsd_instance:
+        image: freebsd-16-0-current-amd64-ufs-20251110
+    - name: FreeBSD 15 amd64
+      freebsd_instance:
+        image: freebsd-15-0-alpha4-amd64-ufs
+    - name: FreeBSD 14 amd64
+      freebsd_instance:
+        image: freebsd-14-3-release-amd64-ufs
+    - name: FreeBSD 13 amd64
+      freebsd_instance:
+        image: freebsd-13-5-release-amd64
   env:
     HOME: /tmp  # cargo cache needs it
   # Install Rust
