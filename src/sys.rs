@@ -8,7 +8,7 @@ use crate::ancillary::{AncillaryMessageReader, AncillaryMessageWriter};
 
 const SOCKET_FLAGS: c_int = libc::SOCK_CLOEXEC | libc::SOCK_NONBLOCK;
 const SOCKET_TYPE: c_int = libc::SOCK_SEQPACKET | SOCKET_FLAGS;
-const SEND_MSG_DEFAULT_FLAGS: c_int = libc::MSG_NOSIGNAL | libc::MSG_EOR;
+const SEND_MSG_DEFAULT_FLAGS: c_int = libc::MSG_NOSIGNAL;
 
 #[cfg(any(target_os = "illumos", target_os = "solaris"))]
 const RECV_MSG_DEFAULT_FLAGS: c_int = libc::MSG_NOSIGNAL;
