@@ -31,14 +31,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@master
-      - uses: actions/cache@v2
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-${{ matrix.rust }}-cargo
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
         with:
