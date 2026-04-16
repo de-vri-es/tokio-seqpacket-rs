@@ -57,3 +57,30 @@ jobs:
           toolchain: ${{ matrix.rust }}
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --release --all-features
+
+  vmactions:
+    runs-on: ubuntu-latest
+    name: FreeBSD
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start VM
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: "14.4"
+          usesh: true
+      - name: Install dependencies
+        shell: freebsd {0}
+        run: |
+          pkg install -y curl
+          fetch https://sh.rustup.rs -o rustup.sh
+          sh rustup.sh -y --profile=minimal
+      - name: Build
+        shell: freebsd {0}
+        run: |
+          . $HOME/.cargo/env
+          cargo build --all-features --color=always
+      - name: Test
+        shell: freebsd {0}
+        run: |
+          . $HOME/.cargo/env
+          cargo test --all-features --color=always
