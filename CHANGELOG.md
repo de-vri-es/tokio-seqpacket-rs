@@ -1,4 +1,4 @@
-main:
+v0.8.2 - 2026-05-14:
   * Make full capacity available for Linux abstract socket paths (was short one byte).
 
 v0.8.1 - 2025-11-15:
