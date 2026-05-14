@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use assert2::{assert, let_assert};
+use assert2::assert;
 use tokio_seqpacket::{UnixSeqpacket, UnixSeqpacketListener};
 
 #[track_caller]
@@ -11,7 +11,7 @@ fn random_abstract_name(suffix: &str) -> PathBuf {
 	use std::ffi::OsString;
 	use std::os::unix::ffi::OsStringExt;
 
-	let_assert!(Ok(mut urandom) = std::fs::File::open("/dev/urandom"));
+	assert!(let Ok(mut urandom) = std::fs::File::open("/dev/urandom"));
 	let mut buffer = Vec::with_capacity(63 + suffix.len());
 	buffer.resize(63, 0);
 	assert!(let Ok(()) = urandom.read_exact(&mut buffer[1..]));
@@ -37,16 +37,16 @@ async fn address_without_null_byte() {
 	let name = random_abstract_name("\x01");
 	assert!(name.as_os_str().as_encoded_bytes().ends_with(&[1]), "{name:?}");
 
-	let_assert!(Ok(mut listener) = UnixSeqpacketListener::bind(&name));
-	let_assert!(Ok(local_addr) = listener.local_addr());
+	assert!(let Ok(mut listener) = UnixSeqpacketListener::bind(&name));
+	assert!(let Ok(local_addr) = listener.local_addr());
 	assert!(local_addr == name);
 
 	let (server_socket, client_socket) = tokio::join!(
 		listener.accept(),
 		UnixSeqpacket::connect(name),
 	);
-	let_assert!(Ok(server_socket) = server_socket);
-	let_assert!(Ok(client_socket) = client_socket);
+	assert!(let Ok(server_socket) = server_socket);
+	assert!(let Ok(client_socket) = client_socket);
 
 	assert!(let Ok(12) = client_socket.send(b"Hello world!").await);
 
@@ -63,16 +63,16 @@ async fn address_ending_with_null_byte() {
 	let name = random_abstract_name("\x00");
 	assert!(name.as_os_str().as_encoded_bytes().ends_with(&[0]), "{name:?}");
 
-	let_assert!(Ok(mut listener) = UnixSeqpacketListener::bind(&name));
-	let_assert!(Ok(local_addr) = listener.local_addr());
+	assert!(let Ok(mut listener) = UnixSeqpacketListener::bind(&name));
+	assert!(let Ok(local_addr) = listener.local_addr());
 	assert!(local_addr == name);
 
 	let (server_socket, client_socket) = tokio::join!(
 		listener.accept(),
 		UnixSeqpacket::connect(name),
 	);
-	let_assert!(Ok(server_socket) = server_socket);
-	let_assert!(Ok(client_socket) = client_socket);
+	assert!(let Ok(server_socket) = server_socket);
+	assert!(let Ok(client_socket) = client_socket);
 
 	assert!(let Ok(12) = client_socket.send(b"Hello world!").await);
 

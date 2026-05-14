@@ -1,4 +1,4 @@
-use assert2::{assert, let_assert};
+use assert2::assert;
 use std::io::Read;
 use tokio_seqpacket::ancillary::{OwnedAncillaryMessage, AncillaryMessage};
 
@@ -13,15 +13,15 @@ async fn pass_fd() {
 
 	// Check that we got exactly one control message containing file descriptors.
 	let mut messages = ancillary.messages();
-	let_assert!(Some(AncillaryMessage::FileDescriptors(mut fds)) = messages.next());
+	assert!(let Some(AncillaryMessage::FileDescriptors(mut fds)) = messages.next());
 	assert!(let None = messages.next());
 
 	// Check that we got exactly one file descriptor in the first control message.
-	let_assert!(Some(fd) = fds.next());
+	assert!(let Some(fd) = fds.next());
 	assert!(let None = fds.next());
 
 	// Check that we can retrieve the message from the attached file.
-	let_assert!(Ok(fd) = fd.try_clone_to_owned());
+	assert!(let Ok(fd) = fd.try_clone_to_owned());
 	let mut file = std::fs::File::from(fd);
 	let mut contents = Vec::new();
 	assert!(let Ok(_) = file.read_to_end(&mut contents));
@@ -36,11 +36,11 @@ async fn can_take_ownership_of_received_fds() {
 
 	// Take ownership of the file descriptors.
 	let mut messages = ancillary.into_messages();
-	let_assert!(Some(OwnedAncillaryMessage::FileDescriptors(mut fds)) = messages.next());
-	let_assert!(None = messages.next());
+	assert!(let Some(OwnedAncillaryMessage::FileDescriptors(mut fds)) = messages.next());
+	assert!(let None = messages.next());
 	assert!(fds.len() == 1);
-	let_assert!(Some(fd) = fds.next());
-	let_assert!(None = fds.next());
+	assert!(let Some(fd) = fds.next());
+	assert!(let None = fds.next());
 
 	// Check that we can retrieve the message from the attached file.
 	let mut file = std::fs::File::from(fd);
@@ -61,15 +61,15 @@ async fn pass_fd_unaligned_buffer() {
 
 	// Check that we got exactly one control message containing file descriptors.
 	let mut messages = ancillary.messages();
-	let_assert!(Some(AncillaryMessage::FileDescriptors(mut fds)) = messages.next());
+	assert!(let Some(AncillaryMessage::FileDescriptors(mut fds)) = messages.next());
 	assert!(let None = messages.next());
 
 	// Check that we got exactly one file descriptor in the first control message.
-	let_assert!(Some(fd) = fds.next());
+	assert!(let Some(fd) = fds.next());
 	assert!(let None = fds.next());
 
 	// Check that we can retrieve the message from the attached file.
-	let_assert!(Ok(fd) = fd.try_clone_to_owned());
+	assert!(let Ok(fd) = fd.try_clone_to_owned());
 	let mut file = std::fs::File::from(fd);
 	let mut contents = Vec::new();
 	assert!(let Ok(_) = file.read_to_end(&mut contents));

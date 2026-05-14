@@ -20,6 +20,6 @@ tokio = { version = "1.22", features = ["net"] }
 filedesc = "0.6.1"
 
 [dev-dependencies]
-assert2 = "0.3.7"
+assert2 = "0.4.0"
 tokio = { version = "1.22", features = ["rt", "rt-multi-thread", "macros", "time"] }
 tempfile = "3.3.0"

@@ -1,10 +1,10 @@
-use assert2::{assert, let_assert};
+use assert2::assert;
 use tokio_seqpacket::UnixSeqpacket;
 
 /// Test a simple send and recv call.
 #[tokio::test]
 async fn send_recv() {
-	let_assert!(Ok((a, b)) = UnixSeqpacket::pair());
+	assert!(let Ok((a, b)) = UnixSeqpacket::pair());
 	assert!(let Ok(12) = a.send(b"Hello world!").await);
 
 	let mut buffer = [0u8; 128];
@@ -15,7 +15,7 @@ async fn send_recv() {
 /// Record boundaries should be preserved
 #[tokio::test]
 async fn record_boundaries() {
-	let_assert!(Ok((a, b)) = UnixSeqpacket::pair());
+	assert!(let Ok((a, b)) = UnixSeqpacket::pair());
 	assert!(let Ok(12) = a.send(b"Hello world!").await);
 	assert!(let Ok(12) = a.send(b"Byebye world").await);
 
@@ -44,7 +44,7 @@ fn send_recv_out_of_order() {
 		// We're using a local task set to ensure we're single threaded.
 		static ABOUT_TO_READ: AtomicBool = AtomicBool::new(false);
 
-		let_assert!(Ok((a, b)) = UnixSeqpacket::pair());
+		assert!(let Ok((a, b)) = UnixSeqpacket::pair());
 
 		// Spawning a task shouldn't run anything until the current task awaits something.
 		// Still, we use the atomic boolean to double-check that.
@@ -67,7 +67,7 @@ fn send_recv_out_of_order() {
 async fn send_recv_vectored() {
 	use std::io::{IoSlice, IoSliceMut};
 
-	let_assert!(Ok((a, b)) = UnixSeqpacket::pair());
+	assert!(let Ok((a, b)) = UnixSeqpacket::pair());
 	assert!(let Ok(12) = a.send_vectored(&[
 		IoSlice::new(b"Hello"),
 		IoSlice::new(b" "),
@@ -100,13 +100,13 @@ fn echo_loop() {
 		.unwrap();
 
 	runtime.block_on(async {
-		let_assert!(Ok((client, server)) = UnixSeqpacket::pair());
+		assert!(let Ok((client, server)) = UnixSeqpacket::pair());
 
 		let server = tokio::task::spawn(async move {
 			let mut buf = vec![0u8; 2048];
 			loop {
 				println!("waiting for next request");
-				let_assert!(Ok(n_received) = server.recv(&mut buf).await);
+				assert!(let Ok(n_received) = server.recv(&mut buf).await);
 				println!("received: {}", String::from_utf8_lossy(&buf[..n_received]));
 				if n_received == 0 {
 					break;
@@ -117,10 +117,10 @@ fn echo_loop() {
 		let client = tokio::task::spawn(async move {
 			for i in 0..1024 {
 				let message = format!("Hello #{}", i);
-				let_assert!(Ok(n_sent) = client.send(message.as_bytes()).await);
+				assert!(let Ok(n_sent) = client.send(message.as_bytes()).await);
 				assert!(n_sent == message.len());
 				let mut buf = vec![0u8; 1024];
-				let_assert!(Ok(n_received) = client.recv(&mut buf).await);
+				assert!(let Ok(n_received) = client.recv(&mut buf).await);
 				assert!(message.as_bytes() == &buf[..n_received]);
 			}
 		});
@@ -142,7 +142,7 @@ fn multiple_waiters() {
 		.unwrap();
 
 	runtime.block_on(async {
-		let_assert!(Ok((a, b)) = UnixSeqpacket::pair());
+		assert!(let Ok((a, b)) = UnixSeqpacket::pair());
 		let a = Arc::new(a);
 		let b = Arc::new(b);
 		let written = Arc::new(AtomicUsize::new(0));

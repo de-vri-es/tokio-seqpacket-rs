@@ -1,4 +1,4 @@
-use assert2::{assert, let_assert};
+use assert2::assert;
 use std::io::{IoSlice, IoSliceMut, Seek, Write, Read};
 use std::os::fd::AsFd;
 use tempfile::tempfile;
@@ -8,16 +8,16 @@ use tokio_seqpacket::ancillary::{AncillaryMessageReader, AncillaryMessageWriter,
 pub async fn receive_file_descriptor(ancillary_buf: &mut [u8]) -> AncillaryMessageReader<'_> {
 	let socket_b = {
 		// Make a file to send as attachment.
-		let_assert!(Ok(mut file_a) = tempfile());
+		assert!(let Ok(mut file_a) = tempfile());
 		assert!(let Ok(_) = file_a.write_all(b"Wie dit leest is gek."));
 		assert!(let Ok(()) = file_a.rewind());
 
-		let_assert!(Ok(mut file_b) = tempfile());
+		assert!(let Ok(mut file_b) = tempfile());
 		assert!(let Ok(_) = file_b.write_all(b"Wie dit leest is gek."));
 		assert!(let Ok(()) = file_b.rewind());
 
 		// Make a pair of connected sockets to send it over.
-		let_assert!(Ok((socket_a, socket_b)) = UnixSeqpacket::pair());
+		assert!(let Ok((socket_a, socket_b)) = UnixSeqpacket::pair());
 
 		// Prepare an ancillary message and add the file descriptor to it.
 		let mut cmsg = [0; 64];
@@ -32,7 +32,7 @@ pub async fn receive_file_descriptor(ancillary_buf: &mut [u8]) -> AncillaryMessa
 	};
 
 	let mut read_buf = [0u8; 64];
-	let_assert!(Ok((29, cmsg)) = socket_b.recv_vectored_with_ancillary(&mut [IoSliceMut::new(&mut read_buf)], ancillary_buf).await);
+	assert!(let Ok((29, cmsg)) = socket_b.recv_vectored_with_ancillary(&mut [IoSliceMut::new(&mut read_buf)], ancillary_buf).await);
 	assert!(&read_buf[..29] == b"Here, have a file descriptor.");
 
 	cmsg
@@ -46,8 +46,8 @@ async fn can_take_ownership_of_received_fds() {
 
 	// Take ownership of the file descriptors.
 	let mut messages = ancillary.into_messages();
-	let_assert!(Some(OwnedAncillaryMessage::FileDescriptors(fds)) = messages.next());
-	let_assert!(None = messages.next());
+	assert!(let Some(OwnedAncillaryMessage::FileDescriptors(fds)) = messages.next());
+	assert!(let None = messages.next());
 	assert!(fds.len() == 2);
 
 	let mut fds: Vec<_> = fds.collect();
