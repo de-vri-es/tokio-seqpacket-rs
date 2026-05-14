@@ -1,3 +1,6 @@
+main:
+  * Make full capacity available for Linux abstract socket paths (was short one byte).
+
 v0.8.1 - 2025-11-15:
   * Always set the `MSG_EOR` flag when sending on a `UnixSeqpacket` socket (needed for FreeBSD 15 and up).
 
