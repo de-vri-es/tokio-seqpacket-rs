@@ -15,9 +15,9 @@ async fn send_recv() {
 
 	let mut buffer = [0u8; 128];
 
-	assert!(let Ok(len) = read_b.recv(&mut buffer).await);
-	assert!(&buffer[..len] == b"Hello B!");
+	assert!(let Ok(msg_info) = read_b.recv(&mut buffer).await);
+	assert!(&buffer[..msg_info.bytes_read()] == b"Hello B!");
 
-	assert!(let Ok(len) = read_a.recv(&mut buffer).await);
-	assert!(&buffer[..len] == b"Hello A!");
+	assert!(let Ok(msg_info) = read_a.recv(&mut buffer).await);
+	assert!(&buffer[..msg_info.bytes_read()] == b"Hello A!");
 }

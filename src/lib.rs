@@ -34,7 +34,8 @@
 //! socket.send(b"Hello!").await?;
 //!
 //! let mut buffer = [0u8; 128];
-//! let len = socket.recv(&mut buffer).await?;
+//! let msg_info = socket.recv(&mut buffer).await?;
+//! let len = msg_info.bytes_read();
 //! println!("{}", String::from_utf8_lossy(&buffer[..len]));
 //! # Ok(())
 //! # }
@@ -59,7 +60,7 @@ mod sys;
 mod ucred;
 
 pub use listener::UnixSeqpacketListener;
-pub use socket::UnixSeqpacket;
+pub use socket::{MessageInfo, UnixSeqpacket};
 pub use ucred::UCred;
 
 #[doc(hidden)]

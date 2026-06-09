@@ -8,11 +8,73 @@ use tokio::io::unix::AsyncFd;
 use crate::ancillary::{AncillaryMessageReader, AncillaryMessageWriter};
 use crate::{sys, UCred};
 
+/// Information about a received seqpacket message.
+#[derive(Debug, Clone)]
+pub struct MessageInfo {
+	pub(crate) bytes_read: usize,
+	pub(crate) truncated: bool,
+	pub(crate) ancillary_truncated: bool,
+}
+
+impl MessageInfo {
+	/// Get the number of data bytes that were read.
+	///
+	/// A value of zero either indicates an empty seqpacket message or that the sender closed
+	/// their half of the connection and all messages have been received.
+	pub fn bytes_read(&self) -> usize {
+		self.bytes_read
+	}
+
+	/// Whether the message was truncated due to insufficient buffer space.
+	///
+	/// The truncated bytes of a received message are lost forever. As such, you should ensure
+	/// that your buffer is large enough for the expected messages, or [peek] at the message
+	/// first to dynamically resize the receive buffer if necessary.
+	///
+	/// [peek]: UnixSeqpacket::peek
+	pub fn truncated(&self) -> bool {
+		self.truncated
+	}
+
+	/// Whether the message's ancillary data was truncated due to insufficient buffer space.
+	///
+	/// The truncated ancillary data of a received message is lost forever. As such, you should
+	/// ensure that your ancillary buffer is large enough for the expected messages, or, if
+	/// writing code for platforms that support this (like Linux and Android), [peek] at
+	/// the message first to dynamically resize the ancillary buffer if necessary.
+	///
+	/// [peek]: UnixSeqpacket::peek_vectored_with_ancillary
+	pub fn ancillary_truncated(&self) -> bool {
+		self.ancillary_truncated
+	}
+}
+
 /// Unix seqpacket socket.
 ///
 /// Note that there are no functions to get the local or remote address of the connection.
 /// That is because connected Unix sockets are always anonymous,
 /// which means that the address contains no useful information.
+///
+/// ## `peek` Methods and Ancillary Data
+///
+/// This type exposes methods to peek at the next message to be received. However, the POSIX
+/// standard does not specify how peeking at a seqpacket/datagram affects its ancillary data.
+///
+/// On Linux and Android, ancillary file descriptors are cloned when peeking, so they are
+/// not lost to subsequent `peek` or `recv` calls. This makes it possible to expose
+/// [`poll_peek_vectored_with_ancillary`] and [`peek_vectored_with_ancillary`] methods that
+/// have the same ancillary ownership semantics as their `recv` variants. These methods
+/// are gated behind the `non-portable` feature.
+///
+/// Other operating systems may behave differently, such as:
+/// - Returning file descriptors from the next message without cloning them (FreeBSD);
+/// - Consuming ancillary data, even when a empty ancillary buffer is passed;
+/// - Returning no ancillary data, even when the message has some.
+///
+/// If writing portable code, consider peeking only when ancillary data is not expected.
+///
+/// [`poll_peek_vectored_with_ancillary`]: Self::poll_peek_vectored_with_ancillary
+/// [`peek_vectored_with_ancillary`]: Self::peek_vectored_with_ancillary
 pub struct UnixSeqpacket {
 	io: AsyncFd<FileDesc>,
 }
@@ -235,14 +297,21 @@ impl UnixSeqpacket {
 	///
 	/// Note that unlike [`Self::recv`], only the last task calling this function will be woken up.
 	/// For that reason, it is preferable to use the async functions rather than polling functions when possible.
-	pub fn poll_recv(&self, cx: &mut Context, buffer: &mut [u8]) -> Poll<std::io::Result<usize>> {
-		loop {
-			let mut ready_guard = ready!(self.io.poll_read_ready(cx)?);
-			match ready_guard.try_io(|inner| sys::recv(inner.get_ref(), buffer)) {
-				Ok(result) => return Poll::Ready(result),
-				Err(_would_block) => continue,
-			}
-		}
+	pub fn poll_recv(&self, cx: &mut Context, buffer: &mut [u8]) -> Poll<std::io::Result<MessageInfo>> {
+		self.poll_recv_vectored(cx, &mut [IoSliceMut::new(buffer)])
+	}
+
+	/// Try to peek at the next message on the socket from the connected peer without blocking.
+	///
+	/// Peeking a message with ancillary data may consume or omit it on some platforms. See the
+	/// [type level documentation](UnixSeqpacket) for more information.
+	///
+	/// If there is no data ready yet, the current task is scheduled to wake up when the socket becomes readable.
+	///
+	/// Note that unlike [`Self::poll`], only the last task calling this function will be woken up.
+	/// For that reason, it is preferable to use the async functions rather than polling functions when possible.
+	pub fn poll_peek(&self, cx: &mut Context, buffer: &mut [u8]) -> Poll<std::io::Result<MessageInfo>> {
+		self.poll_peek_vectored(cx, &mut [IoSliceMut::new(buffer)])
 	}
 
 	/// Try to receive data on the socket from the connected peer without blocking.
@@ -251,8 +320,30 @@ impl UnixSeqpacket {
 	///
 	/// Note that unlike [`Self::recv_vectored`], only the last task calling this function will be woken up.
 	/// For that reason, it is preferable to use the async functions rather than polling functions when possible.
-	pub fn poll_recv_vectored(&self, cx: &mut Context, buffer: &mut [IoSliceMut]) -> Poll<std::io::Result<usize>> {
+	pub fn poll_recv_vectored(
+		&self,
+		cx: &mut Context,
+		buffer: &mut [IoSliceMut],
+	) -> Poll<std::io::Result<MessageInfo>> {
 		let (read, _ancillary) = ready!(self.poll_recv_vectored_with_ancillary(cx, buffer, &mut []))?;
+		Poll::Ready(Ok(read))
+	}
+
+	/// Try to peek at the next message on the socket from the connected peer without blocking.
+	///
+	/// Peeking a message with ancillary data may consume or omit it on some platforms. See the
+	/// [type level documentation](UnixSeqpacket) for more information.
+	///
+	/// If there is no data ready yet, the current task is scheduled to wake up when the socket becomes readable.
+	///
+	/// Note that unlike [`Self::recv_vectored`], only the last task calling this function will be woken up.
+	/// For that reason, it is preferable to use the async functions rather than polling functions when possible.
+	pub fn poll_peek_vectored(
+		&self,
+		cx: &mut Context,
+		buffer: &mut [IoSliceMut],
+	) -> Poll<std::io::Result<MessageInfo>> {
+		let (read, _ancillary) = ready!(self.poll_recv_vectored_with_ancillary_internal(cx, buffer, &mut [], true))?;
 		Poll::Ready(Ok(read))
 	}
 
@@ -274,12 +365,49 @@ impl UnixSeqpacket {
 		cx: &mut Context,
 		buffer: &mut [IoSliceMut],
 		ancillary_buffer: &'a mut [u8],
-	) -> Poll<std::io::Result<(usize, AncillaryMessageReader<'a>)>> {
+	) -> Poll<std::io::Result<(MessageInfo, AncillaryMessageReader<'a>)>> {
+		self.poll_recv_vectored_with_ancillary_internal(cx, buffer, ancillary_buffer, false)
+	}
+
+	/// Try to peek at the next message and its ancillary data on the socket from the connected peer without blocking.
+	///
+	/// Any file descriptors received in the anicallary data will have the `close-on-exec` flag set.
+	/// If the OS supports it, this is done atomically with the reception of the message.
+	/// However, on Illumos and Solaris, the `close-on-exec` flag is set in a separate step after receiving the message.
+	///
+	/// Note that you should always wrap or close any file descriptors received this way.
+	/// If you do not, the received file descriptors will stay open until the process is terminated.
+	///
+	/// Peeking a message with ancillary data may consume or omit it on some platforms. See the
+	/// [type level documentation](UnixSeqpacket) for more information.
+	///
+	/// If there is no data ready yet, the current task is scheduled to wake up when the socket becomes readable.
+	///
+	/// Note that unlike [`Self::peek_vectored_with_ancillary`], only the last task calling this function will be woken up.
+	/// For that reason, it is preferable to use the async functions rather than polling functions when possible.
+	#[cfg(any(target_os = "linux", target_os = "android"))]
+	pub fn poll_peek_vectored_with_ancillary<'a>(
+		&self,
+		cx: &mut Context,
+		buffer: &mut [IoSliceMut],
+		ancillary_buffer: &'a mut [u8],
+	) -> Poll<std::io::Result<(MessageInfo, AncillaryMessageReader<'a>)>> {
+		self.poll_recv_vectored_with_ancillary_internal(cx, buffer, ancillary_buffer, true)
+	}
+
+	/// Shared implementation of `poll_recv_vectored_with_ancillary` and `poll_peek_vectored_with_ancillary`.
+	fn poll_recv_vectored_with_ancillary_internal<'a>(
+		&self,
+		cx: &mut Context,
+		buffer: &mut [IoSliceMut],
+		ancillary_buffer: &'a mut [u8],
+		peek: bool,
+	) -> Poll<std::io::Result<(MessageInfo, AncillaryMessageReader<'a>)>> {
 		loop {
 			let mut ready_guard = ready!(self.io.poll_read_ready(cx)?);
 
 			let (read, ancillary_reader) =
-				match ready_guard.try_io(|inner| sys::recv_msg(inner.get_ref(), buffer, ancillary_buffer)) {
+				match ready_guard.try_io(|inner| sys::recv_msg(inner.get_ref(), buffer, ancillary_buffer, peek)) {
 					Ok(x) => x?,
 					Err(_would_block) => continue,
 				};
@@ -297,14 +425,20 @@ impl UnixSeqpacket {
 	/// This function is safe to call concurrently from different tasks.
 	/// All calling tasks will try to complete the asynchronous action,
 	/// although the order in which they complete is not guaranteed.
-	pub async fn recv(&self, buffer: &mut [u8]) -> std::io::Result<usize> {
-		loop {
-			let mut ready_guard = self.io.readable().await?;
-			match ready_guard.try_io(|inner| sys::recv(inner.get_ref(), buffer)) {
-				Ok(result) => return result,
-				Err(_would_block) => continue,
-			}
-		}
+	pub async fn recv(&self, buffer: &mut [u8]) -> std::io::Result<MessageInfo> {
+		self.recv_vectored(&mut [IoSliceMut::new(buffer)]).await
+	}
+
+	/// Peek at the next message on the socket from the connected peer.
+	///
+	/// Peeking a message with ancillary data may consume or omit it on some platforms. See the
+	/// [type level documentation](UnixSeqpacket) for more information.
+	///
+	/// This function is safe to call concurrently from different tasks.
+	/// All calling tasks will try to complete the asynchronous action,
+	/// although the order in which they complete is not guaranteed.
+	pub async fn peek(&self, buffer: &mut [u8]) -> std::io::Result<MessageInfo> {
+		self.peek_vectored(&mut [IoSliceMut::new(buffer)]).await
 	}
 
 	/// Receive data on the socket from the connected peer.
@@ -312,8 +446,23 @@ impl UnixSeqpacket {
 	/// This function is safe to call concurrently from different tasks.
 	/// All calling tasks will try to complete the asynchronous action,
 	/// although the order in which they complete is not guaranteed.
-	pub async fn recv_vectored(&self, buffer: &mut [IoSliceMut<'_>]) -> std::io::Result<usize> {
+	pub async fn recv_vectored(&self, buffer: &mut [IoSliceMut<'_>]) -> std::io::Result<MessageInfo> {
 		let (read, _ancillary) = self.recv_vectored_with_ancillary(buffer, &mut []).await?;
+		Ok(read)
+	}
+
+	/// Peek at the next message on the socket from the connected peer.
+	///
+	/// Peeking a message with ancillary data may consume or omit it on some platforms. See the
+	/// [type level documentation](UnixSeqpacket) for more information.
+	///
+	/// This function is safe to call concurrently from different tasks.
+	/// All calling tasks will try to complete the asynchronous action,
+	/// although the order in which they complete is not guaranteed.
+	pub async fn peek_vectored(&self, buffer: &mut [IoSliceMut<'_>]) -> std::io::Result<MessageInfo> {
+		let (read, _ancillary) = self
+			.recv_vectored_with_ancillary_internal(buffer, &mut [], true)
+			.await?;
 		Ok(read)
 	}
 
@@ -333,12 +482,48 @@ impl UnixSeqpacket {
 		&self,
 		buffer: &mut [IoSliceMut<'_>],
 		ancillary_buffer: &'a mut [u8],
-	) -> std::io::Result<(usize, AncillaryMessageReader<'a>)> {
+	) -> std::io::Result<(MessageInfo, AncillaryMessageReader<'a>)> {
+		self.recv_vectored_with_ancillary_internal(buffer, ancillary_buffer, false)
+			.await
+	}
+
+	/// Peek at the next message and its ancillary data on the socket from the connected peer.
+	///
+	/// Any file descriptors received in the anicallary data will have the `close-on-exec` flag set.
+	/// If the OS supports it, this is done atomically with the reception of the message.
+	/// However, on Illumos and Solaris, the `close-on-exec` flag is set in a separate step after receiving the message.
+	///
+	/// Note that you should always wrap or close any file descriptors received this way.
+	/// If you do not, the received file descriptors will stay open until the process is terminated.
+	///
+	/// Peeking a message with ancillary data may consume or omit it on some platforms. See the
+	/// [type level documentation](UnixSeqpacket) for more information.
+	///
+	/// This function is safe to call concurrently from different tasks.
+	/// All calling tasks will try to complete the asynchronous action,
+	/// although the order in which they complete is not guaranteed.
+	#[cfg(any(target_os = "linux", target_os = "android"))]
+	pub async fn peek_vectored_with_ancillary<'a>(
+		&self,
+		buffer: &mut [IoSliceMut<'_>],
+		ancillary_buffer: &'a mut [u8],
+	) -> std::io::Result<(MessageInfo, AncillaryMessageReader<'a>)> {
+		self.recv_vectored_with_ancillary_internal(buffer, ancillary_buffer, true)
+			.await
+	}
+
+	/// Shared implementation of `read_vectored_with_ancillary` and `poll_vectored_with_ancillary`.
+	async fn recv_vectored_with_ancillary_internal<'a>(
+		&self,
+		buffer: &mut [IoSliceMut<'_>],
+		ancillary_buffer: &'a mut [u8],
+		peek: bool,
+	) -> std::io::Result<(MessageInfo, AncillaryMessageReader<'a>)> {
 		loop {
 			let mut ready_guard = self.io.readable().await?;
 
 			let (read, ancillary_reader) =
-				match ready_guard.try_io(|inner| sys::recv_msg(inner.get_ref(), buffer, ancillary_buffer)) {
+				match ready_guard.try_io(|inner| sys::recv_msg(inner.get_ref(), buffer, ancillary_buffer, peek)) {
 					Ok(x) => x?,
 					Err(_would_block) => continue,
 				};

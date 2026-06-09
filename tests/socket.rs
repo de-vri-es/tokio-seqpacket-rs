@@ -8,7 +8,8 @@ async fn send_recv() {
 	assert!(let Ok(12) = a.send(b"Hello world!").await);
 
 	let mut buffer = [0u8; 128];
-	assert!(let Ok(12) = b.recv(&mut buffer).await);
+	assert!(let Ok(msg_info) = b.recv(&mut buffer).await);
+	assert_eq!(msg_info.bytes_read(), 12);
 	assert!(&buffer[..12] == b"Hello world!");
 }
 
@@ -22,9 +23,11 @@ async fn record_boundaries() {
 	// Having sent two messages, we recv should return twice, with only a single message each
 	// time.
 	let mut buffer = [0u8; 128];
-	assert!(let Ok(12) = b.recv(&mut buffer).await);
+	assert!(let Ok(msg_info) = b.recv(&mut buffer).await);
+	assert_eq!(msg_info.bytes_read(), 12);
 	assert!(&buffer[..12] == b"Hello world!");
-	assert!(let Ok(12) = b.recv(&mut buffer).await);
+	assert!(let Ok(msg_info) = b.recv(&mut buffer).await);
+	assert_eq!(msg_info.bytes_read(), 12);
 	assert!(&buffer[..12] == b"Byebye world");
 }
 
@@ -55,7 +58,8 @@ fn send_recv_out_of_order() {
 
 		let mut buffer = [0u8; 128];
 		ABOUT_TO_READ.store(true, Ordering::Relaxed);
-		assert!(let Ok(12) = b.recv(&mut buffer).await);
+		assert!(let Ok(msg_info) = b.recv(&mut buffer).await);
+		assert_eq!(msg_info.bytes_read(), 12);
 		assert!(&buffer[..12] == b"Hello world!");
 
 		assert!(let Ok(()) = task.await);
@@ -79,12 +83,13 @@ async fn send_recv_vectored() {
 	let mut space = [0u8; 1];
 	let mut world = [0u8; 5];
 	let mut punct = [0u8; 1];
-	assert!(let Ok(12) = b.recv_vectored(&mut [
+	assert!(let Ok(msg_info) = b.recv_vectored(&mut [
 		IoSliceMut::new(&mut hello),
 		IoSliceMut::new(&mut space),
 		IoSliceMut::new(&mut world),
 		IoSliceMut::new(&mut punct),
 	]).await);
+	assert_eq!(msg_info.bytes_read(), 12);
 
 	assert!(&hello == b"Hello");
 	assert!(&space == b" ");
@@ -106,12 +111,12 @@ fn echo_loop() {
 			let mut buf = vec![0u8; 2048];
 			loop {
 				println!("waiting for next request");
-				assert!(let Ok(n_received) = server.recv(&mut buf).await);
-				println!("received: {}", String::from_utf8_lossy(&buf[..n_received]));
-				if n_received == 0 {
+				assert!(let Ok(msg_info) = server.recv(&mut buf).await);
+				println!("received: {}", String::from_utf8_lossy(&buf[..msg_info.bytes_read()]));
+				if msg_info.bytes_read() == 0 {
 					break;
 				}
-				assert!(let Ok(_) = server.send(&buf[..n_received]).await);
+				assert!(let Ok(_) = server.send(&buf[..msg_info.bytes_read()]).await);
 			}
 		});
 		let client = tokio::task::spawn(async move {
@@ -120,8 +125,8 @@ fn echo_loop() {
 				assert!(let Ok(n_sent) = client.send(message.as_bytes()).await);
 				assert!(n_sent == message.len());
 				let mut buf = vec![0u8; 1024];
-				assert!(let Ok(n_received) = client.recv(&mut buf).await);
-				assert!(message.as_bytes() == &buf[..n_received]);
+				assert!(let Ok(msg_info) = client.recv(&mut buf).await);
+				assert!(message.as_bytes() == &buf[..msg_info.bytes_read()]);
 			}
 		});
 
@@ -155,7 +160,8 @@ fn multiple_waiters() {
 			async move {
 				let mut buffer = [0u8; 12];
 				assert!(written.load(Ordering::Relaxed) == 0); // Double check that the test will cause recv() to park the current task.
-				assert!(let Ok(12) = a.recv(&mut buffer).await);
+				assert!(let Ok(msg_info) = a.recv(&mut buffer).await);
+				assert_eq!(msg_info.bytes_read(), 12);
 				assert!(&buffer == b"Hello world!");
 				received.fetch_add(1, Ordering::Relaxed);
 			}
@@ -168,7 +174,8 @@ fn multiple_waiters() {
 			async move {
 				let mut buffer = [0u8; 12];
 				assert!(written.load(Ordering::Relaxed) == 0); // Double check that the test will cause recv() to park the current task.
-				assert!(let Ok(12) = a.recv(&mut buffer).await);
+				assert!(let Ok(msg_info) = a.recv(&mut buffer).await);
+				assert_eq!(msg_info.bytes_read(), 12);
 				assert!(&buffer == b"Hello world!");
 				received.fetch_add(1, Ordering::Relaxed);
 			}

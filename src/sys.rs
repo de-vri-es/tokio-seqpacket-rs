@@ -5,6 +5,7 @@ use std::os::raw::{c_int, c_void};
 use std::path::{Path, PathBuf};
 
 use crate::ancillary::{AncillaryMessageReader, AncillaryMessageWriter};
+use crate::MessageInfo;
 
 const SOCKET_FLAGS: c_int = libc::SOCK_CLOEXEC | libc::SOCK_NONBLOCK;
 const SOCKET_TYPE: c_int = libc::SOCK_SEQPACKET | SOCKET_FLAGS;
@@ -169,23 +170,12 @@ pub fn send_msg(
 	}
 }
 
-pub fn recv(socket: &FileDesc, buffer: &mut [u8]) -> std::io::Result<usize> {
-	unsafe {
-		let read = check_size(libc::recv(
-			socket.as_raw_fd(),
-			buffer.as_mut_ptr() as *mut c_void,
-			buffer.len(),
-			RECV_MSG_DEFAULT_FLAGS,
-		))?;
-		Ok(read)
-	}
-}
-
 pub fn recv_msg<'a>(
 	socket: &FileDesc,
 	buffer: &mut [IoSliceMut],
 	ancillary_buffer: &'a mut [u8],
-) -> std::io::Result<(usize, AncillaryMessageReader<'a>)> {
+	peek: bool,
+) -> std::io::Result<(MessageInfo, AncillaryMessageReader<'a>)> {
 	let control_data = match ancillary_buffer.len() {
 		0 => std::ptr::null_mut(),
 		_ => ancillary_buffer.as_mut_ptr() as *mut std::os::raw::c_void,
@@ -211,23 +201,30 @@ pub fn recv_msg<'a>(
 			.map_err(|_| std::io::ErrorKind::InvalidInput)?;
 	}
 
-	let size = unsafe {
+	let peek_flag = if peek { libc::MSG_PEEK } else { 0 };
+	let bytes_read = unsafe {
 		check_size(libc::recvmsg(
 			socket.as_raw_fd(),
 			&mut header as *mut _,
-			RECV_MSG_DEFAULT_FLAGS,
+			RECV_MSG_DEFAULT_FLAGS | peek_flag,
 		))?
 	};
-	let truncated = header.msg_flags & libc::MSG_CTRUNC != 0;
+
+	let msg_info = MessageInfo {
+		bytes_read,
+		truncated: header.msg_flags & libc::MSG_TRUNC != 0,
+		ancillary_truncated: header.msg_flags & libc::MSG_CTRUNC != 0,
+	};
+
 	// This is not a no-op on all platforms.
 	#[allow(clippy::unnecessary_cast)]
 	let length = header.msg_controllen as usize;
-
-	let ancillary_reader = unsafe { AncillaryMessageReader::new(&mut ancillary_buffer[..length], truncated) };
+	let ancillary_reader =
+		unsafe { AncillaryMessageReader::new(&mut ancillary_buffer[..length], msg_info.ancillary_truncated) };
 
 	#[cfg(any(target_os = "illumos", target_os = "solaris"))]
 	post_process_fds(&ancillary_reader);
-	Ok((size, ancillary_reader))
+	Ok((msg_info, ancillary_reader))
 }
 
 // Illumos and solaris do not support MSG_CMSG_CLOEXEC,
