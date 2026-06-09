@@ -1,6 +1,6 @@
 //! Utility module for borrowing file descriptors with a specific lifetime.
 
-use std::os::fd::{BorrowedFd, AsFd};
+use std::os::fd::{AsFd, BorrowedFd};
 
 /// Trait for types that can give a [`BorrowedFd<'a>`].
 ///
