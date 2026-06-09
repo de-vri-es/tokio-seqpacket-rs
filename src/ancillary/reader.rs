@@ -1,4 +1,4 @@
-use std::os::fd::{OwnedFd, BorrowedFd};
+use std::os::fd::{BorrowedFd, OwnedFd};
 
 use super::FD_SIZE;
 
@@ -61,7 +61,7 @@ pub enum AncillaryMessage<'a> {
 	Credentials(UnixCredentials<'a>),
 
 	/// Ancillary message uninterpreted data.
-	Other(UnknownMessage<'a>)
+	Other(UnknownMessage<'a>),
 }
 
 /// This enum represent one control message of variable type.
@@ -76,7 +76,7 @@ pub enum OwnedAncillaryMessage<'a> {
 	Credentials(UnixCredentials<'a>),
 
 	/// Ancillary message uninterpreted data.
-	Other(UnknownMessage<'a>)
+	Other(UnknownMessage<'a>),
 }
 
 /// A control message containing borrowed file descriptors.
@@ -165,7 +165,10 @@ impl<'a> AncillaryMessageReader<'a> {
 
 	/// Returns the iterator of the control messages.
 	pub fn messages(&self) -> AncillaryMessages<'_> {
-		AncillaryMessages { buffer: self.buffer, current: None }
+		AncillaryMessages {
+			buffer: self.buffer,
+			current: None,
+		}
 	}
 
 	/// Consume the ancillary message to take ownership of the contained objects (such as file descriptors).
@@ -178,7 +181,10 @@ impl<'a> AncillaryMessageReader<'a> {
 impl Drop for AncillaryMessageReader<'_> {
 	fn drop(&mut self) {
 		if !self.is_empty() {
-			drop(IntoAncillaryMessages { buffer: self.buffer, current: None })
+			drop(IntoAncillaryMessages {
+				buffer: self.buffer,
+				current: None,
+			})
 		}
 	}
 }
@@ -232,7 +238,11 @@ impl<'a> AncillaryMessage<'a> {
 				(libc::SOL_SOCKET, libc::SCM_RIGHTS) => Self::FileDescriptors(FileDescriptors { data }),
 				#[cfg(any(target_os = "android", target_os = "linux", target_os = "netbsd"))]
 				(libc::SOL_SOCKET, super::SCM_CREDENTIALS) => Self::Credentials(UnixCredentials { data }),
-				(cmsg_level, cmsg_type) => Self::Other(UnknownMessage { cmsg_level, cmsg_type, data }),
+				(cmsg_level, cmsg_type) => Self::Other(UnknownMessage {
+					cmsg_level,
+					cmsg_type,
+					data,
+				}),
 			}
 		}
 	}
@@ -295,7 +305,11 @@ impl<'a> OwnedAncillaryMessage<'a> {
 				(libc::SOL_SOCKET, libc::SCM_RIGHTS) => Self::FileDescriptors(OwnedFileDescriptors { data }),
 				#[cfg(any(target_os = "android", target_os = "linux", target_os = "netbsd"))]
 				(libc::SOL_SOCKET, super::SCM_CREDENTIALS) => Self::Credentials(UnixCredentials { data }),
-				(cmsg_level, cmsg_type) => Self::Other(UnknownMessage { cmsg_level, cmsg_type, data }),
+				(cmsg_level, cmsg_type) => Self::Other(UnknownMessage {
+					cmsg_level,
+					cmsg_type,
+					data,
+				}),
 			}
 		}
 	}
@@ -321,9 +335,7 @@ impl<'a> FileDescriptors<'a> {
 		} else {
 			// SAFETY: The memory is valid, and the kernel guaranteed it is a file descriptor.
 			// Additionally, the returned lifetime is linked to the `AncillaryMessageReader` which owns the file descriptor.
-			unsafe {
-				Some(std::ptr::read_unaligned(self.data[index * FD_SIZE..].as_ptr().cast()))
-			}
+			unsafe { Some(std::ptr::read_unaligned(self.data[index * FD_SIZE..].as_ptr().cast())) }
 		}
 	}
 }
@@ -406,8 +418,8 @@ impl<'a> std::iter::ExactSizeIterator for OwnedFileDescriptors<'a> {
 
 #[cfg(any(target_os = "linux", target_os = "android", target_os = "netbsd"))]
 mod unix_creds_impl {
-	use super::UnixCredentials;
 	use super::super::RawScmCreds;
+	use super::UnixCredentials;
 	use crate::UCred;
 
 	impl UnixCredentials<'_> {
@@ -428,9 +440,8 @@ mod unix_creds_impl {
 			} else {
 				// SAFETY: The memory is valid, and the kernel guaranteed it is a credentials struct.
 				// It probably also guarantees alignment, but just in case not, use read_unaligned.
-				let raw: RawScmCreds = unsafe {
-					std::ptr::read_unaligned(self.data.as_ptr().cast::<RawScmCreds>().add(index))
-				};
+				let raw: RawScmCreds =
+					unsafe { std::ptr::read_unaligned(self.data.as_ptr().cast::<RawScmCreds>().add(index)) };
 				Some(UCred::from_scm_creds(raw))
 			}
 		}

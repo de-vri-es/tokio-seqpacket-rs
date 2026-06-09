@@ -1,5 +1,5 @@
 use assert2::assert;
-use std::os::fd::{AsRawFd, OwnedFd, FromRawFd};
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use tokio_seqpacket::ancillary::AncillaryMessage;
 
 mod ancillary_fd_helper;

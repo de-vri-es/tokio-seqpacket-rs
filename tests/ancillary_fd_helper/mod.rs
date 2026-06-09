@@ -2,8 +2,8 @@ use assert2::assert;
 use std::io::{IoSlice, IoSliceMut, Seek, Write};
 use std::os::fd::AsFd;
 use tempfile::tempfile;
-use tokio_seqpacket::UnixSeqpacket;
 use tokio_seqpacket::ancillary::{AncillaryMessageReader, AncillaryMessageWriter};
+use tokio_seqpacket::UnixSeqpacket;
 
 pub async fn receive_file_descriptor(ancillary_buf: &mut [u8]) -> AncillaryMessageReader<'_> {
 	let socket_b = {

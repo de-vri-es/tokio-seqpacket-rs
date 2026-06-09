@@ -278,10 +278,11 @@ impl UnixSeqpacket {
 		loop {
 			let mut ready_guard = ready!(self.io.poll_read_ready(cx)?);
 
-			let (read, ancillary_reader) = match ready_guard.try_io(|inner| sys::recv_msg(inner.get_ref(), buffer, ancillary_buffer)) {
-				Ok(x) => x?,
-				Err(_would_block) => continue,
-			};
+			let (read, ancillary_reader) =
+				match ready_guard.try_io(|inner| sys::recv_msg(inner.get_ref(), buffer, ancillary_buffer)) {
+					Ok(x) => x?,
+					Err(_would_block) => continue,
+				};
 
 			// SAFETY: We have to work around a borrow checker bug:
 			// It doesn't know that we return in this branch, so the loop terminates.
@@ -312,8 +313,7 @@ impl UnixSeqpacket {
 	/// All calling tasks will try to complete the asynchronous action,
 	/// although the order in which they complete is not guaranteed.
 	pub async fn recv_vectored(&self, buffer: &mut [IoSliceMut<'_>]) -> std::io::Result<usize> {
-		let (read, _ancillary) = self.recv_vectored_with_ancillary(buffer, &mut [])
-			.await?;
+		let (read, _ancillary) = self.recv_vectored_with_ancillary(buffer, &mut []).await?;
 		Ok(read)
 	}
 
@@ -337,10 +337,11 @@ impl UnixSeqpacket {
 		loop {
 			let mut ready_guard = self.io.readable().await?;
 
-			let (read, ancillary_reader) = match ready_guard.try_io(|inner| sys::recv_msg(inner.get_ref(), buffer, ancillary_buffer)) {
-				Ok(x) => x?,
-				Err(_would_block) => continue,
-			};
+			let (read, ancillary_reader) =
+				match ready_guard.try_io(|inner| sys::recv_msg(inner.get_ref(), buffer, ancillary_buffer)) {
+					Ok(x) => x?,
+					Err(_would_block) => continue,
+				};
 
 			// SAFETY: We have to work around a borrow checker bug:
 			// It doesn't know that we return in this branch, so the loop terminates.

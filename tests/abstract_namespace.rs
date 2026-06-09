@@ -7,8 +7,8 @@ use tokio_seqpacket::{UnixSeqpacket, UnixSeqpacketListener};
 
 #[track_caller]
 fn random_abstract_name(suffix: &str) -> PathBuf {
-	use std::io::Read;
 	use std::ffi::OsString;
+	use std::io::Read;
 	use std::os::unix::ffi::OsStringExt;
 
 	assert!(let Ok(mut urandom) = std::fs::File::open("/dev/urandom"));
@@ -41,10 +41,7 @@ async fn address_without_null_byte() {
 	assert!(let Ok(local_addr) = listener.local_addr());
 	assert!(local_addr == name);
 
-	let (server_socket, client_socket) = tokio::join!(
-		listener.accept(),
-		UnixSeqpacket::connect(name),
-	);
+	let (server_socket, client_socket) = tokio::join!(listener.accept(), UnixSeqpacket::connect(name),);
 	assert!(let Ok(server_socket) = server_socket);
 	assert!(let Ok(client_socket) = client_socket);
 
@@ -67,10 +64,7 @@ async fn address_ending_with_null_byte() {
 	assert!(let Ok(local_addr) = listener.local_addr());
 	assert!(local_addr == name);
 
-	let (server_socket, client_socket) = tokio::join!(
-		listener.accept(),
-		UnixSeqpacket::connect(name),
-	);
+	let (server_socket, client_socket) = tokio::join!(listener.accept(), UnixSeqpacket::connect(name),);
 	assert!(let Ok(server_socket) = server_socket);
 	assert!(let Ok(client_socket) = client_socket);
 

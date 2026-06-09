@@ -130,7 +130,11 @@ pub fn send(socket: &FileDesc, buffer: &[u8]) -> std::io::Result<usize> {
 	}
 }
 
-pub fn send_msg(socket: &FileDesc, buffer: &[IoSlice], ancillary: &mut AncillaryMessageWriter) -> std::io::Result<usize> {
+pub fn send_msg(
+	socket: &FileDesc,
+	buffer: &[IoSlice],
+	ancillary: &mut AncillaryMessageWriter,
+) -> std::io::Result<usize> {
 	let control_data = match ancillary.len() {
 		0 => std::ptr::null_mut(),
 		_ => ancillary.buffer.as_mut_ptr() as *mut std::os::raw::c_void,
@@ -201,7 +205,8 @@ pub fn recv_msg<'a>(
 	// This is not a no-op on all platforms.
 	#[allow(clippy::useless_conversion)]
 	{
-		header.msg_controllen = ancillary_buffer.len()
+		header.msg_controllen = ancillary_buffer
+			.len()
 			.try_into()
 			.map_err(|_| std::io::ErrorKind::InvalidInput)?;
 	}

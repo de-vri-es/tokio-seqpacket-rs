@@ -1,6 +1,6 @@
 use assert2::assert;
 use std::io::Read;
-use tokio_seqpacket::ancillary::{OwnedAncillaryMessage, AncillaryMessage};
+use tokio_seqpacket::ancillary::{AncillaryMessage, OwnedAncillaryMessage};
 
 mod ancillary_fd_helper;
 use ancillary_fd_helper::receive_file_descriptor;
@@ -56,7 +56,9 @@ async fn pass_fd_unaligned_buffer() {
 	// Receive a file descriptor
 	let mut ancillary_buffer = [0; 64];
 	// But use a purposefully misaligned ancillary buffer.
-	let align = ancillary_buffer.as_ptr().align_offset(AncillaryMessageWriter::BUFFER_ALIGN);
+	let align = ancillary_buffer
+		.as_ptr()
+		.align_offset(AncillaryMessageWriter::BUFFER_ALIGN);
 	let ancillary = receive_file_descriptor(&mut ancillary_buffer[align + 1..]).await;
 
 	// Check that we got exactly one control message containing file descriptors.

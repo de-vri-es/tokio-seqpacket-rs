@@ -6,7 +6,7 @@ mod reader;
 pub use reader::*;
 
 mod writer;
-pub use writer::{AncillaryMessageWriter, AddControlMessageError};
+pub use writer::{AddControlMessageError, AncillaryMessageWriter};
 
 const FD_SIZE: usize = std::mem::size_of::<BorrowedFd>();
 

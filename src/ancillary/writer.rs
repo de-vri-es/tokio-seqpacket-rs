@@ -107,13 +107,19 @@ impl<'a> AncillaryMessageWriter<'a> {
 	/// }
 	/// ```
 	pub fn add_fds<T>(&mut self, fds: &[T]) -> Result<(), AddControlMessageError>
-		where
-			T: BorrowFd<'a>,
+	where
+		T: BorrowFd<'a>,
 	{
 		use std::os::fd::AsRawFd;
 
 		let byte_len = fds.len() * FD_SIZE;
-		let buffer = reserve_ancillary_data(self.buffer, &mut self.length, byte_len, libc::SOL_SOCKET, libc::SCM_RIGHTS)?;
+		let buffer = reserve_ancillary_data(
+			self.buffer,
+			&mut self.length,
+			byte_len,
+			libc::SOL_SOCKET,
+			libc::SCM_RIGHTS,
+		)?;
 
 		for (i, fd) in fds.iter().enumerate() {
 			let bytes = fd.borrow_fd().as_raw_fd().to_ne_bytes();
@@ -136,7 +142,13 @@ impl<'a> AncillaryMessageWriter<'a> {
 		const ELEM_SIZE: usize = std::mem::size_of::<RawScmCreds>();
 
 		let byte_len = credentials.len() * ELEM_SIZE;
-		let buffer = reserve_ancillary_data(self.buffer, &mut self.length, byte_len, libc::SOL_SOCKET, super::SCM_CREDENTIALS)?;
+		let buffer = reserve_ancillary_data(
+			self.buffer,
+			&mut self.length,
+			byte_len,
+			libc::SOL_SOCKET,
+			super::SCM_CREDENTIALS,
+		)?;
 
 		for (i, cred) in credentials.iter().enumerate() {
 			let raw = &cred.to_scm_creds();
@@ -144,7 +156,11 @@ impl<'a> AncillaryMessageWriter<'a> {
 			// since they come from distinct &mut self and &[SocketCred] references.
 			// The buffer is guaranteed to be large enough by `reserve_ancillary_data`.
 			unsafe {
-				std::ptr::copy_nonoverlapping(raw as *const _ as *const u8, buffer[i * ELEM_SIZE..].as_mut_ptr(), ELEM_SIZE);
+				std::ptr::copy_nonoverlapping(
+					raw as *const _ as *const u8,
+					buffer[i * ELEM_SIZE..].as_mut_ptr(),
+					ELEM_SIZE,
+				);
 			}
 		}
 		Ok(())
@@ -190,13 +206,11 @@ fn reserve_ancillary_data<'a>(
 	cmsg_level: libc::c_int,
 	cmsg_type: libc::c_int,
 ) -> Result<&'a mut [u8], AddControlMessageError> {
-	let byte_len = u32::try_from(byte_len)
-		.map_err(|_| AddControlMessageError(()))?;
+	let byte_len = u32::try_from(byte_len).map_err(|_| AddControlMessageError(()))?;
 
 	unsafe {
 		let additional_space = libc::CMSG_SPACE(byte_len) as usize;
-		let new_length = length.checked_add(additional_space)
-			.ok_or(AddControlMessageError(()))?;
+		let new_length = length.checked_add(additional_space).ok_or(AddControlMessageError(()))?;
 		if new_length > buffer.len() {
 			return Err(AddControlMessageError(()));
 		}

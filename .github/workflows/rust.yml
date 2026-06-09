@@ -4,6 +4,19 @@ on:
   pull_request: { branches: "*" }
 
 jobs:
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - name: Rustfmt
+        run: cargo fmt --check --all
+
   build_and_test:
     name: Linux
     runs-on: ${{ matrix.os }}

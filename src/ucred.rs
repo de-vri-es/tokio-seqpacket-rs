@@ -158,11 +158,7 @@ fn get_peer_cred<T: AsRawFd>(sock: &T) -> std::io::Result<UCred> {
 	let ret = unsafe { getpeereid(raw_fd, uid.as_mut_ptr(), gid.as_mut_ptr()) };
 
 	if ret == 0 {
-		Ok(UCred {
-			uid,
-			gid,
-			pid,
-		})
+		Ok(UCred { uid, gid, pid })
 	} else {
 		Err(std::io::Error::last_os_error())
 	}
@@ -182,11 +178,7 @@ fn get_peer_cred<T: AsRawFd>(sock: &T) -> std::io::Result<UCred> {
 
 			libc::ucred_free(cred);
 
-			Ok(UCred {
-				uid,
-				gid,
-				pid,
-			})
+			Ok(UCred { uid, gid, pid })
 		} else {
 			Err(std::io::Error::last_os_error())
 		}
