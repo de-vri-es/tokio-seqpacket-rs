@@ -1,6 +1,5 @@
 use assert2::assert;
 use std::io::{IoSlice, IoSliceMut, Read, Seek, Write};
-use std::os::fd::AsFd;
 use tempfile::tempfile;
 use tokio_seqpacket::ancillary::{AncillaryMessageReader, AncillaryMessageWriter, OwnedAncillaryMessage};
 use tokio_seqpacket::UnixSeqpacket;
@@ -22,7 +21,7 @@ pub async fn receive_file_descriptor(ancillary_buf: &mut [u8]) -> AncillaryMessa
 		// Prepare an ancillary message and add the file descriptor to it.
 		let mut cmsg = [0; 64];
 		let mut cmsg = AncillaryMessageWriter::new(&mut cmsg);
-		assert!(let Ok(()) = cmsg.add_fds(&[file_a.as_fd(), file_b.as_fd()]));
+		assert!(let Ok(()) = cmsg.add_fds([&file_a, &file_b]));
 
 		// Send the message with file descriptor.
 		assert!(let Ok(29) = socket_a.send_vectored_with_ancillary(&[IoSlice::new(b"Here, have a file descriptor.")], &mut cmsg).await);

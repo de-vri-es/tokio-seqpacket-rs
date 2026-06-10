@@ -21,7 +21,7 @@ use super::FD_SIZE;
 ///     let mut fds = [0; 8];
 ///     let mut ancillary_buffer = [0; 128];
 ///     let mut ancillary = AncillaryMessageWriter::new(&mut ancillary_buffer);
-///     ancillary.add_fds(&[&file])?;
+///     ancillary.add_fds([&file])?;
 ///
 ///     let mut buf = [1; 8];
 ///     let mut bufs = [IoSlice::new(&mut buf)];
@@ -98,7 +98,7 @@ impl<'a> AncillaryMessageWriter<'a> {
 	///
 	///     let mut ancillary_buffer = [0; 128];
 	///     let mut ancillary = AncillaryMessageWriter::new(&mut ancillary_buffer);
-	///     ancillary.add_fds(&[file.as_fd()]);
+	///     ancillary.add_fds([file.as_fd()]);
 	///
 	///     let buf = [1; 8];
 	///     let mut bufs = &mut [IoSlice::new(&buf)];
@@ -106,14 +106,17 @@ impl<'a> AncillaryMessageWriter<'a> {
 	///     Ok(())
 	/// }
 	/// ```
-	pub fn add_fds<T>(&mut self, fds: &[T]) -> Result<(), AddControlMessageError>
+	pub fn add_fds<I>(&mut self, fds: I) -> Result<(), AddControlMessageError>
 	where
-		T: BorrowFd<'a>,
+		I: IntoIterator<Item: BorrowFd<'a>, IntoIter: ExactSizeIterator>,
 	{
 		use std::os::fd::AsRawFd;
 
-		let byte_len = fds.len() * FD_SIZE;
-		let buffer = reserve_ancillary_data(
+		let mut fds = fds.into_iter();
+		let fds_len = fds.len();
+		let byte_len = fds_len * FD_SIZE;
+
+		let mut cmsg = reserve_ancillary_data(
 			self.buffer,
 			&mut self.length,
 			byte_len,
@@ -121,10 +124,13 @@ impl<'a> AncillaryMessageWriter<'a> {
 			libc::SCM_RIGHTS,
 		)?;
 
-		for (i, fd) in fds.iter().enumerate() {
+		for i in 0..fds_len {
+			let fd = fds.next().expect("ExactSizeIterator shorter than its 'len'");
 			let bytes = fd.borrow_fd().as_raw_fd().to_ne_bytes();
-			buffer[i * FD_SIZE..][..FD_SIZE].copy_from_slice(&bytes)
+			cmsg[i * FD_SIZE..][..FD_SIZE].copy_from_slice(&bytes);
 		}
+		// SAFETY: the cmsg data is valid and fully initialized.
+		unsafe { cmsg.commit() };
 		Ok(())
 	}
 
@@ -136,13 +142,19 @@ impl<'a> AncillaryMessageWriter<'a> {
 	/// This function adds a single control message with level `SOL_SOCKET` and type `SCM_CREDENTIALS` on most platforms.
 	/// On NetBSD the message has type `SCM_CREDS`.
 	#[cfg(any(target_os = "android", target_os = "linux", target_os = "netbsd"))]
-	pub fn add_ucreds(&mut self, credentials: &[crate::UCred]) -> Result<(), AddControlMessageError> {
+	pub fn add_ucreds<'c, I>(&mut self, credentials: I) -> Result<(), AddControlMessageError>
+	where
+		I: IntoIterator<Item = &'c crate::UCred, IntoIter: ExactSizeIterator>,
+	{
 		use super::RawScmCreds;
 
 		const ELEM_SIZE: usize = std::mem::size_of::<RawScmCreds>();
 
-		let byte_len = credentials.len() * ELEM_SIZE;
-		let buffer = reserve_ancillary_data(
+		let mut credentials = credentials.into_iter();
+		let credentials_len = credentials.len();
+		let byte_len = credentials_len * ELEM_SIZE;
+
+		let mut cmsg = reserve_ancillary_data(
 			self.buffer,
 			&mut self.length,
 			byte_len,
@@ -150,7 +162,8 @@ impl<'a> AncillaryMessageWriter<'a> {
 			super::SCM_CREDENTIALS,
 		)?;
 
-		for (i, cred) in credentials.iter().enumerate() {
+		for i in 0..credentials_len {
+			let cred = credentials.next().expect("ExactSizeIterator shorter than its 'len'");
 			let raw = &cred.to_scm_creds();
 			// SAFETY: The pointers are guaranteed valid and non-overlapping,
 			// since they come from distinct &mut self and &[SocketCred] references.
@@ -158,11 +171,14 @@ impl<'a> AncillaryMessageWriter<'a> {
 			unsafe {
 				std::ptr::copy_nonoverlapping(
 					raw as *const _ as *const u8,
-					buffer[i * ELEM_SIZE..].as_mut_ptr(),
+					cmsg[i * ELEM_SIZE..].as_mut_ptr(),
 					ELEM_SIZE,
 				);
 			}
 		}
+
+		// SAFETY: the cmsg data is valid and fully initialized.
+		unsafe { cmsg.commit() };
 		Ok(())
 	}
 
@@ -199,13 +215,18 @@ impl From<AddControlMessageError> for std::io::Error {
 	}
 }
 
+/// Reserve space for a new control message with data size `byte_len` inside `buffer`,
+/// starting at `length`.
+///
+/// On success, returns a [`CMsgGuard`] for modifying the data of the control message
+/// and updating `length` through [`CMsgGuard::commit`] when done.
 fn reserve_ancillary_data<'a>(
 	buffer: &'a mut [u8],
-	length: &mut usize,
+	length: &'a mut usize,
 	byte_len: usize,
 	cmsg_level: libc::c_int,
 	cmsg_type: libc::c_int,
-) -> Result<&'a mut [u8], AddControlMessageError> {
+) -> Result<CMsgGuard<'a>, AddControlMessageError> {
 	let byte_len = u32::try_from(byte_len).map_err(|_| AddControlMessageError(()))?;
 
 	unsafe {
@@ -239,13 +260,17 @@ fn reserve_ancillary_data<'a>(
 			return Err(AddControlMessageError(()));
 		}
 
-		*length = new_length;
 		(*previous_cmsg).cmsg_level = cmsg_level;
 		(*previous_cmsg).cmsg_type = cmsg_type;
 		(*previous_cmsg).cmsg_len = libc::CMSG_LEN(byte_len) as _;
 
 		let data = libc::CMSG_DATA(previous_cmsg).cast();
-		Ok(std::slice::from_raw_parts_mut(data, additional_space))
+		let data = std::slice::from_raw_parts_mut(data, additional_space);
+		Ok(CMsgGuard {
+			data,
+			length,
+			new_length,
+		})
 	}
 }
 
@@ -256,5 +281,38 @@ fn align_buffer_mut(buffer: &mut [u8], align: usize) -> &mut [u8] {
 		&mut []
 	} else {
 		&mut buffer[offset..]
+	}
+}
+
+struct CMsgGuard<'a> {
+	data: &'a mut [u8],
+	length: &'a mut usize,
+	new_length: usize,
+}
+
+impl std::ops::Deref for CMsgGuard<'_> {
+	type Target = [u8];
+
+	fn deref(&self) -> &Self::Target {
+		self.data
+	}
+}
+
+impl std::ops::DerefMut for CMsgGuard<'_> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		self.data
+	}
+}
+
+impl<'a> CMsgGuard<'a> {
+	/// Update the length of the parent buffer, "committing" the changes made to self.
+	///
+	/// # Safety
+	///
+	/// While this function has no actual safety invariants, if the parent slice of
+	/// self is eventually used as a control message buffer care must be taken
+	/// to ensure that it is fully initialized with valid data for its cmsg type.
+	unsafe fn commit(self) {
+		*self.length = self.new_length;
 	}
 }
