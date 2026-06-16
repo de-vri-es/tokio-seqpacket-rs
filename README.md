@@ -42,6 +42,12 @@ let len = socket.recv(&mut buffer).await?;
 println!("{}", String::from_utf8_lossy(&buffer[..len]));
 ```
 
+## Non-portable features
+
+This crate mostly exposes APIs for portable POSIX functionality. However, it also supports some OS-specific features,
+such sending and receiving credentials as ancillary data, and peeking at the contents of ancillary data. To avoid
+accidentally writing non-portable code, these are gated behind the `non-portable` crate feature.
+
 [`UnixSeqpacketListener`]: https://docs.rs/tokio-seqpacket/latest/tokio_seqpacket/struct.UnixSeqpacketListener.html
 [`UnixSeqpacket`]: https://docs.rs/tokio-seqpacket/latest/tokio_seqpacket/struct.UnixSeqpacket.html
 [`UnixSeqpacket::pair()`]: https://docs.rs/tokio-seqpacket/latest/tokio_seqpacket/struct.UnixSeqpacket.html#method.pair

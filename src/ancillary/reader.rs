@@ -57,7 +57,10 @@ pub enum AncillaryMessage<'a> {
 	FileDescriptors(FileDescriptors<'a>),
 
 	/// Ancillary message holding unix credentials.
-	#[cfg(any(doc, target_os = "android", target_os = "linux", target_os = "netbsd",))]
+	#[cfg(all(
+		feature = "non-portable",
+		any(target_os = "android", target_os = "linux", target_os = "netbsd")
+	))]
 	Credentials(UnixCredentials<'a>),
 
 	/// Ancillary message uninterpreted data.
@@ -72,7 +75,10 @@ pub enum OwnedAncillaryMessage<'a> {
 	FileDescriptors(OwnedFileDescriptors<'a>),
 
 	/// Ancillary message holding unix credentials.
-	#[cfg(any(doc, target_os = "android", target_os = "linux", target_os = "netbsd",))]
+	#[cfg(all(
+		feature = "non-portable",
+		any(target_os = "android", target_os = "linux", target_os = "netbsd")
+	))]
 	Credentials(UnixCredentials<'a>),
 
 	/// Ancillary message uninterpreted data.
@@ -94,7 +100,10 @@ pub struct OwnedFileDescriptors<'a> {
 
 /// A control message containing unix credentials for a process.
 #[derive(Copy, Clone)]
-#[cfg(any(doc, target_os = "linux", target_os = "android", target_os = "netbsd"))]
+#[cfg(all(
+	feature = "non-portable",
+	any(target_os = "android", target_os = "linux", target_os = "netbsd")
+))]
 pub struct UnixCredentials<'a> {
 	/// The message data.
 	data: &'a [u8],
@@ -236,7 +245,10 @@ impl<'a> AncillaryMessage<'a> {
 
 			match (cmsg.cmsg_level, cmsg.cmsg_type) {
 				(libc::SOL_SOCKET, libc::SCM_RIGHTS) => Self::FileDescriptors(FileDescriptors { data }),
-				#[cfg(any(target_os = "android", target_os = "linux", target_os = "netbsd"))]
+				#[cfg(all(
+					feature = "non-portable",
+					any(target_os = "android", target_os = "linux", target_os = "netbsd")
+				))]
 				(libc::SOL_SOCKET, super::SCM_CREDENTIALS) => Self::Credentials(UnixCredentials { data }),
 				(cmsg_level, cmsg_type) => Self::Other(UnknownMessage {
 					cmsg_level,
@@ -303,7 +315,10 @@ impl<'a> OwnedAncillaryMessage<'a> {
 
 			match (cmsg.cmsg_level, cmsg.cmsg_type) {
 				(libc::SOL_SOCKET, libc::SCM_RIGHTS) => Self::FileDescriptors(OwnedFileDescriptors { data }),
-				#[cfg(any(target_os = "android", target_os = "linux", target_os = "netbsd"))]
+				#[cfg(all(
+					feature = "non-portable",
+					any(target_os = "android", target_os = "linux", target_os = "netbsd")
+				))]
 				(libc::SOL_SOCKET, super::SCM_CREDENTIALS) => Self::Credentials(UnixCredentials { data }),
 				(cmsg_level, cmsg_type) => Self::Other(UnknownMessage {
 					cmsg_level,
@@ -416,7 +431,10 @@ impl<'a> std::iter::ExactSizeIterator for OwnedFileDescriptors<'a> {
 	}
 }
 
-#[cfg(any(target_os = "linux", target_os = "android", target_os = "netbsd"))]
+#[cfg(all(
+	feature = "non-portable",
+	any(target_os = "linux", target_os = "android", target_os = "netbsd")
+))]
 mod unix_creds_impl {
 	use super::super::RawScmCreds;
 	use super::UnixCredentials;

@@ -1,4 +1,4 @@
-#![cfg(any(target_os = "linux", target_os = "android"))]
+#![cfg(all(feature = "non-portable", any(target_os = "linux", target_os = "android")))]
 
 use assert2::assert;
 use std::io::{IoSliceMut, Read, Seek};

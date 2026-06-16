@@ -436,7 +436,7 @@ impl UnixSeqpacket {
 	///
 	/// Note that unlike [`Self::peek_with_ancillary`], only the last task calling this function will be woken up.
 	/// For that reason, it is preferable to use the async functions rather than polling functions when possible.
-	#[cfg(any(target_os = "linux", target_os = "android"))]
+	#[cfg(all(feature = "non-portable", any(target_os = "linux", target_os = "android")))]
 	pub fn poll_peek_with_ancillary<'a>(
 		&self,
 		cx: &mut Context,
@@ -462,7 +462,7 @@ impl UnixSeqpacket {
 	///
 	/// Note that unlike [`Self::peek_vectored_with_ancillary`], only the last task calling this function will be woken up.
 	/// For that reason, it is preferable to use the async functions rather than polling functions when possible.
-	#[cfg(any(target_os = "linux", target_os = "android"))]
+	#[cfg(all(feature = "non-portable", any(target_os = "linux", target_os = "android")))]
 	pub fn poll_peek_vectored_with_ancillary<'a>(
 		&self,
 		cx: &mut Context,
@@ -600,7 +600,7 @@ impl UnixSeqpacket {
 	/// This function is safe to call concurrently from different tasks.
 	/// All calling tasks will try to complete the asynchronous action,
 	/// although the order in which they complete is not guaranteed.
-	#[cfg(any(target_os = "linux", target_os = "android"))]
+	#[cfg(all(feature = "non-portable", any(target_os = "linux", target_os = "android")))]
 	pub async fn peek_with_ancillary<'a>(
 		&self,
 		buffer: &mut [u8],
@@ -625,7 +625,7 @@ impl UnixSeqpacket {
 	/// This function is safe to call concurrently from different tasks.
 	/// All calling tasks will try to complete the asynchronous action,
 	/// although the order in which they complete is not guaranteed.
-	#[cfg(any(target_os = "linux", target_os = "android"))]
+	#[cfg(all(feature = "non-portable", any(target_os = "linux", target_os = "android")))]
 	pub async fn peek_vectored_with_ancillary<'a>(
 		&self,
 		buffer: &mut [IoSliceMut<'_>],
