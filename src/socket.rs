@@ -61,7 +61,7 @@ impl MessageInfo {
 /// This type exposes methods to peek at the next message to be received.
 /// However, the POSIX standard does not specify how peeking at a seqpacket/datagram affects its ancillary data.
 ///
-/// On Linux and Android, ancillary file descriptors are cloned when peeking,
+/// On Linux and Android, ancillary file descriptors are duplicated when peeking,
 /// so they are not lost to subsequent `peek` or `recv` calls.
 /// This makes it possible to expose [`poll_peek_vectored_with_ancillary`] and [`peek_vectored_with_ancillary`] methods
 /// that have the same ancillary ownership semantics as their `recv` variants.
