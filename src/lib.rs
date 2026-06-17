@@ -40,6 +40,12 @@
 //! # Ok(())
 //! # }
 //! ```
+//!
+//! # Non-portable features
+//!
+//! This crate mostly exposes APIs for portable POSIX functionality.
+//! However, it also supports some OS-specific features, such sending and receiving credentials as ancillary data, and peeking at the contents of ancillary data.
+//! To avoid accidentally writing non-portable code, these are gated behind the `non-portable` crate feature.
 
 #![warn(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]

@@ -38,15 +38,16 @@ let mut socket = UnixSeqpacket::connect("/run/foo.sock").await?;
 socket.send(b"Hello!").await?;
 
 let mut buffer = [0u8; 128];
-let len = socket.recv(&mut buffer).await?;
+let msg_info = socket.recv(&mut buffer).await?;
+let len = msg_info.bytes_read();
 println!("{}", String::from_utf8_lossy(&buffer[..len]));
 ```
 
 ## Non-portable features
 
-This crate mostly exposes APIs for portable POSIX functionality. However, it also supports some OS-specific features,
-such sending and receiving credentials as ancillary data, and peeking at the contents of ancillary data. To avoid
-accidentally writing non-portable code, these are gated behind the `non-portable` crate feature.
+This crate mostly exposes APIs for portable POSIX functionality.
+However, it also supports some OS-specific features, such sending and receiving credentials as ancillary data, and peeking at the contents of ancillary data.
+To avoid accidentally writing non-portable code, these are gated behind the `non-portable` crate feature.
 
 [`UnixSeqpacketListener`]: https://docs.rs/tokio-seqpacket/latest/tokio_seqpacket/struct.UnixSeqpacketListener.html
 [`UnixSeqpacket`]: https://docs.rs/tokio-seqpacket/latest/tokio_seqpacket/struct.UnixSeqpacket.html
