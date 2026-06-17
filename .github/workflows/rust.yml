@@ -52,17 +52,9 @@ jobs:
           components: clippy
           target: ${{ matrix.target }}
       - name: Build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          toolchain: ${{ matrix.rust }}
-          args: --all-features --color=always --target ${{ matrix.target }}
+        run: rustup run ${{ matrix.rust }} cargo build --features non-portable --color=always --target ${{ matrix.target }}
       - name: Test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          toolchain: ${{ matrix.rust }}
-          args: --all-features --color=always --target ${{ matrix.target }}
+        run: rustup run ${{ matrix.rust }} cargo test  --features non-portable --color=always --target ${{ matrix.target }}
       - name: Clippy
         uses: actions-rs/clippy-check@v1
         if: matrix.build == 'nightly'
@@ -70,6 +62,11 @@ jobs:
           toolchain: ${{ matrix.rust }}
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --release --all-features
+      - name: Documentation
+        if: matrix.build == 'nightly'
+        env:
+          RUSTDOCFLAGS: -Dwarnings
+        run: rustup run ${{ matrix.rust }} cargo doc  --all-features --color=always --target ${{ matrix.target }}
 
   vmactions:
     runs-on: ubuntu-latest
@@ -91,9 +88,9 @@ jobs:
         shell: freebsd {0}
         run: |
           . $HOME/.cargo/env
-          cargo build --all-features --color=always
+          cargo build --features non-portable --color=always
       - name: Test
         shell: freebsd {0}
         run: |
           . $HOME/.cargo/env
-          cargo test --all-features --color=always
+          cargo test --features non-portable --color=always

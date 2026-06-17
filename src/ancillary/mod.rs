@@ -42,4 +42,5 @@ mod non_portable {
 }
 
 #[cfg(feature = "non-portable")]
+#[allow(unused_imports, reason = "may or may not import something, depending on platform")]
 pub(crate) use non_portable::*;
