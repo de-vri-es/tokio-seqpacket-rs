@@ -48,7 +48,7 @@
 //! To avoid accidentally writing non-portable code, these are gated behind the `non-portable` crate feature.
 
 #![warn(missing_docs)]
-#![cfg_attr(docsrs, feature(doc_cfg))]
+#![cfg_attr(feature = "doc-cfg", feature(doc_cfg))]
 
 macro_rules! ready {
 	($e:expr) => {
