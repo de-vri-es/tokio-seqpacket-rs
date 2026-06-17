@@ -8,7 +8,64 @@ async fn send_recv() {
 	assert!(let Ok(12) = a.send(b"Hello world!").await);
 
 	let mut buffer = [0u8; 128];
-	assert!(let Ok(12) = b.recv(&mut buffer).await);
+	assert!(let Ok(msg_info) = b.recv(&mut buffer).await);
+	assert!(msg_info.bytes_read() == 12);
+	assert!(!msg_info.truncated());
+	assert!(&buffer[..12] == b"Hello world!");
+}
+
+/// Test that receiving a message partially sets the truncated flag.
+#[tokio::test]
+async fn recv_partial() {
+	assert!(let Ok((a, b)) = UnixSeqpacket::pair());
+	assert!(let Ok(12) = a.send(b"Hello world!").await);
+
+	let mut buffer = [0u8; 5];
+	assert!(let Ok(msg_info) = b.recv(&mut buffer).await);
+	assert!(msg_info.bytes_read() == 5);
+	assert!(msg_info.truncated());
+	assert!(&buffer == b"Hello");
+}
+
+/// Test a simple send and peek call.
+#[tokio::test]
+async fn send_peek() {
+	assert!(let Ok((a, b)) = UnixSeqpacket::pair());
+	assert!(let Ok(12) = a.send(b"Hello world!").await);
+
+	let mut buffer = [0u8; 128];
+
+	// Peeking should not consume the message, so do it twice
+	for _ in 0..2 {
+		assert!(let Ok(msg_info) = b.peek(&mut buffer).await);
+		assert!(msg_info.bytes_read() == 12);
+		assert!(!msg_info.truncated());
+		assert!(&buffer[..12] == b"Hello world!");
+	}
+
+	// We should still able to receive the message after peeking
+	assert!(let Ok(msg_info) = b.recv(&mut buffer).await);
+	assert!(msg_info.bytes_read() == 12);
+	assert!(!msg_info.truncated());
+	assert!(&buffer[..12] == b"Hello world!");
+}
+
+/// Test peeking a portion of a message with a small buffer.
+#[tokio::test]
+async fn peek_partial() {
+	assert!(let Ok((a, b)) = UnixSeqpacket::pair());
+	assert!(let Ok(12) = a.send(b"Hello world!").await);
+
+	let mut buffer = [0u8; 128];
+	assert!(let Ok(msg_info) = b.peek(&mut buffer[..5]).await);
+	assert!(msg_info.bytes_read() == 5);
+	assert!(msg_info.truncated());
+	assert!(&buffer[..5] == b"Hello");
+
+	// We should still able to receive the full message after peeking
+	assert!(let Ok(msg_info) = b.recv(&mut buffer).await);
+	assert!(msg_info.bytes_read() == 12);
+	assert!(!msg_info.truncated());
 	assert!(&buffer[..12] == b"Hello world!");
 }
 
@@ -22,9 +79,11 @@ async fn record_boundaries() {
 	// Having sent two messages, we recv should return twice, with only a single message each
 	// time.
 	let mut buffer = [0u8; 128];
-	assert!(let Ok(12) = b.recv(&mut buffer).await);
+	assert!(let Ok(msg_info) = b.recv(&mut buffer).await);
+	assert!(msg_info.bytes_read() == 12);
 	assert!(&buffer[..12] == b"Hello world!");
-	assert!(let Ok(12) = b.recv(&mut buffer).await);
+	assert!(let Ok(msg_info) = b.recv(&mut buffer).await);
+	assert!(msg_info.bytes_read() == 12);
 	assert!(&buffer[..12] == b"Byebye world");
 }
 
@@ -55,7 +114,8 @@ fn send_recv_out_of_order() {
 
 		let mut buffer = [0u8; 128];
 		ABOUT_TO_READ.store(true, Ordering::Relaxed);
-		assert!(let Ok(12) = b.recv(&mut buffer).await);
+		assert!(let Ok(msg_info) = b.recv(&mut buffer).await);
+		assert!(msg_info.bytes_read() == 12);
 		assert!(&buffer[..12] == b"Hello world!");
 
 		assert!(let Ok(()) = task.await);
@@ -79,17 +139,59 @@ async fn send_recv_vectored() {
 	let mut space = [0u8; 1];
 	let mut world = [0u8; 5];
 	let mut punct = [0u8; 1];
-	assert!(let Ok(12) = b.recv_vectored(&mut [
+	assert!(let Ok(msg_info) = b.recv_vectored(&mut [
 		IoSliceMut::new(&mut hello),
 		IoSliceMut::new(&mut space),
 		IoSliceMut::new(&mut world),
 		IoSliceMut::new(&mut punct),
 	]).await);
+	assert!(msg_info.bytes_read() == 12);
 
 	assert!(&hello == b"Hello");
 	assert!(&space == b" ");
 	assert!(&world == b"world");
 	assert!(&punct == b"!");
+}
+
+/// Test a simple send_vectored and peek_vectored call.
+#[tokio::test]
+async fn send_peek_vectored() {
+	use std::io::{IoSlice, IoSliceMut};
+
+	assert!(let Ok((a, b)) = UnixSeqpacket::pair());
+	assert!(let Ok(12) = a.send_vectored(&[
+		IoSlice::new(b"Hello"),
+		IoSlice::new(b" "),
+		IoSlice::new(b"world"),
+		IoSlice::new(b"!"),
+	]).await);
+
+	let mut hello = [0u8; 5];
+	let mut space = [0u8; 1];
+	let mut world = [0u8; 5];
+	let mut punct = [0u8; 1];
+
+	// Peeking should not consume the message
+	for _ in 0..2 {
+		assert!(let Ok(msg_info) = b.peek_vectored(&mut [
+			IoSliceMut::new(&mut hello),
+			IoSliceMut::new(&mut space),
+			IoSliceMut::new(&mut world),
+			IoSliceMut::new(&mut punct),
+		]).await);
+		assert!(msg_info.bytes_read() == 12);
+
+		assert!(&hello == b"Hello");
+		assert!(&space == b" ");
+		assert!(&world == b"world");
+		assert!(&punct == b"!");
+	}
+
+	// We should still able to receive the message after peeking
+	let mut buffer = [0u8; 12];
+	assert!(let Ok(msg_info) = b.recv(&mut buffer).await);
+	assert!(msg_info.bytes_read() == 12);
+	assert!(&buffer[..12] == b"Hello world!");
 }
 
 #[test]
@@ -106,12 +208,12 @@ fn echo_loop() {
 			let mut buf = vec![0u8; 2048];
 			loop {
 				println!("waiting for next request");
-				assert!(let Ok(n_received) = server.recv(&mut buf).await);
-				println!("received: {}", String::from_utf8_lossy(&buf[..n_received]));
-				if n_received == 0 {
+				assert!(let Ok(msg_info) = server.recv(&mut buf).await);
+				println!("received: {}", String::from_utf8_lossy(&buf[..msg_info.bytes_read()]));
+				if msg_info.bytes_read() == 0 {
 					break;
 				}
-				assert!(let Ok(_) = server.send(&buf[..n_received]).await);
+				assert!(let Ok(_) = server.send(&buf[..msg_info.bytes_read()]).await);
 			}
 		});
 		let client = tokio::task::spawn(async move {
@@ -120,8 +222,8 @@ fn echo_loop() {
 				assert!(let Ok(n_sent) = client.send(message.as_bytes()).await);
 				assert!(n_sent == message.len());
 				let mut buf = vec![0u8; 1024];
-				assert!(let Ok(n_received) = client.recv(&mut buf).await);
-				assert!(message.as_bytes() == &buf[..n_received]);
+				assert!(let Ok(msg_info) = client.recv(&mut buf).await);
+				assert!(message.as_bytes() == &buf[..msg_info.bytes_read()]);
 			}
 		});
 
@@ -155,7 +257,8 @@ fn multiple_waiters() {
 			async move {
 				let mut buffer = [0u8; 12];
 				assert!(written.load(Ordering::Relaxed) == 0); // Double check that the test will cause recv() to park the current task.
-				assert!(let Ok(12) = a.recv(&mut buffer).await);
+				assert!(let Ok(msg_info) = a.recv(&mut buffer).await);
+				assert!(msg_info.bytes_read() == 12);
 				assert!(&buffer == b"Hello world!");
 				received.fetch_add(1, Ordering::Relaxed);
 			}
@@ -168,7 +271,8 @@ fn multiple_waiters() {
 			async move {
 				let mut buffer = [0u8; 12];
 				assert!(written.load(Ordering::Relaxed) == 0); // Double check that the test will cause recv() to park the current task.
-				assert!(let Ok(12) = a.recv(&mut buffer).await);
+				assert!(let Ok(msg_info) = a.recv(&mut buffer).await);
+				assert!(msg_info.bytes_read() == 12);
 				assert!(&buffer == b"Hello world!");
 				received.fetch_add(1, Ordering::Relaxed);
 			}

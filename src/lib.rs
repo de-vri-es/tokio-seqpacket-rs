@@ -34,13 +34,21 @@
 //! socket.send(b"Hello!").await?;
 //!
 //! let mut buffer = [0u8; 128];
-//! let len = socket.recv(&mut buffer).await?;
+//! let msg_info = socket.recv(&mut buffer).await?;
+//! let len = msg_info.bytes_read();
 //! println!("{}", String::from_utf8_lossy(&buffer[..len]));
 //! # Ok(())
 //! # }
 //! ```
+//!
+//! # Non-portable features
+//!
+//! This crate mostly exposes APIs for portable POSIX functionality.
+//! However, it also supports some OS-specific features, such sending and receiving credentials as ancillary data, and peeking at the contents of ancillary data.
+//! To avoid accidentally writing non-portable code, these are gated behind the `non-portable` crate feature.
 
 #![warn(missing_docs)]
+#![cfg_attr(feature = "doc-cfg", feature(doc_cfg))]
 
 macro_rules! ready {
 	($e:expr) => {
@@ -59,7 +67,7 @@ mod sys;
 mod ucred;
 
 pub use listener::UnixSeqpacketListener;
-pub use socket::UnixSeqpacket;
+pub use socket::{MessageInfo, UnixSeqpacket};
 pub use ucred::UCred;
 
 #[doc(hidden)]

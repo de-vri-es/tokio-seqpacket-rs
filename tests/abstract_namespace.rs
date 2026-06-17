@@ -48,7 +48,8 @@ async fn address_without_null_byte() {
 	assert!(let Ok(12) = client_socket.send(b"Hello world!").await);
 
 	let mut buffer = [0u8; 128];
-	assert!(let Ok(12) = server_socket.recv(&mut buffer).await);
+	assert!(let Ok(msg_info) = server_socket.recv(&mut buffer).await);
+	assert!(msg_info.bytes_read() == 12);
 	assert!(&buffer[..12] == b"Hello world!");
 }
 
@@ -71,6 +72,7 @@ async fn address_ending_with_null_byte() {
 	assert!(let Ok(12) = client_socket.send(b"Hello world!").await);
 
 	let mut buffer = [0u8; 128];
-	assert!(let Ok(12) = server_socket.recv(&mut buffer).await);
+	assert!(let Ok(msg_info) = server_socket.recv(&mut buffer).await);
+	assert!(msg_info.bytes_read() == 12);
 	assert!(&buffer[..12] == b"Hello world!");
 }

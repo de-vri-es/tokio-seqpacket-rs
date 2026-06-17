@@ -39,44 +39,51 @@ impl UCred {
 			Some(self.pid)
 		}
 	}
+}
 
-	#[cfg(any(target_os = "linux", target_os = "android"))]
-	pub(crate) fn from_scm_creds(raw: crate::ancillary::RawScmCreds) -> UCred {
-		UCred {
-			uid: raw.uid,
-			gid: raw.gid,
-			pid: raw.pid,
+#[cfg(feature = "non-portable")]
+mod non_portable {
+	use super::UCred;
+
+	impl UCred {
+		#[cfg(any(target_os = "linux", target_os = "android"))]
+		pub(crate) fn from_scm_creds(raw: crate::ancillary::RawScmCreds) -> UCred {
+			UCred {
+				uid: raw.uid,
+				gid: raw.gid,
+				pid: raw.pid,
+			}
 		}
-	}
 
-	#[cfg(target_os = "netbsd")]
-	pub(crate) fn from_scm_creds(raw: crate::ancillary::RawScmCreds) -> UCred {
-		UCred {
-			uid: raw.sc_uid,
-			gid: raw.sc_gid,
-			pid: raw.sc_pid,
+		#[cfg(target_os = "netbsd")]
+		pub(crate) fn from_scm_creds(raw: crate::ancillary::RawScmCreds) -> UCred {
+			UCred {
+				uid: raw.sc_uid,
+				gid: raw.sc_gid,
+				pid: raw.sc_pid,
+			}
 		}
-	}
 
-	#[cfg(any(target_os = "linux", target_os = "android"))]
-	pub(crate) fn to_scm_creds(self) -> crate::ancillary::RawScmCreds {
-		crate::ancillary::RawScmCreds {
-			uid: self.uid,
-			gid: self.gid,
-			pid: self.pid,
+		#[cfg(any(target_os = "linux", target_os = "android"))]
+		pub(crate) fn to_scm_creds(self) -> crate::ancillary::RawScmCreds {
+			crate::ancillary::RawScmCreds {
+				uid: self.uid,
+				gid: self.gid,
+				pid: self.pid,
+			}
 		}
-	}
 
-	#[cfg(target_os = "netbsd")]
-	pub(crate) fn to_scm_creds(self) -> crate::ancillary::RawScmCreds {
-		crate::ancillary::RawScmCreds {
-			sc_uid: self.uid,
-			sc_gid: self.gid,
-			sc_pid: self.pid,
-			sc_euid: self.uid,
-			sc_egid: self.gid,
-			sc_ngroups: 0,
-			sc_groups: [],
+		#[cfg(target_os = "netbsd")]
+		pub(crate) fn to_scm_creds(self) -> crate::ancillary::RawScmCreds {
+			crate::ancillary::RawScmCreds {
+				sc_uid: self.uid,
+				sc_gid: self.gid,
+				sc_pid: self.pid,
+				sc_euid: self.uid,
+				sc_egid: self.gid,
+				sc_ngroups: 0,
+				sc_groups: [],
+			}
 		}
 	}
 }

@@ -17,8 +17,8 @@ async fn unix_seqpacket_listener() {
 				assert!(let Ok(peer) = listener.accept().await);
 				assert!(let Ok(_) = peer.send(b"Hello!").await);
 				let mut buf = [0u8; 128];
-				assert!(let Ok(len) = peer.recv(&mut buf).await);
-				assert!(&buf[..len] == b"Goodbye!");
+				assert!(let Ok(msg_info) = peer.recv(&mut buf).await);
+				assert!(&buf[..msg_info.bytes_read()] == b"Goodbye!");
 			}
 		}
 	});
@@ -26,8 +26,8 @@ async fn unix_seqpacket_listener() {
 	for _ in 0..2 {
 		assert!(let Ok(peer) = UnixSeqpacket::connect(&path).await);
 		let mut buf = [0u8; 128];
-		assert!(let Ok(len) = peer.recv(&mut buf).await);
-		assert!(&buf[..len] == b"Hello!");
+		assert!(let Ok(msg_info) = peer.recv(&mut buf).await);
+		assert!(&buf[..msg_info.bytes_read()] == b"Hello!");
 		assert!(let Ok(_) = peer.send(b"Goodbye!").await);
 	}
 

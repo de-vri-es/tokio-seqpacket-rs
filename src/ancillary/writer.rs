@@ -141,7 +141,10 @@ impl<'a> AncillaryMessageWriter<'a> {
 	///
 	/// This function adds a single control message with level `SOL_SOCKET` and type `SCM_CREDENTIALS` on most platforms.
 	/// On NetBSD the message has type `SCM_CREDS`.
-	#[cfg(any(target_os = "android", target_os = "linux", target_os = "netbsd"))]
+	#[cfg(all(
+		feature = "non-portable",
+		any(target_os = "android", target_os = "linux", target_os = "netbsd")
+	))]
 	pub fn add_ucreds<'c, I>(&mut self, credentials: I) -> Result<(), AddControlMessageError>
 	where
 		I: IntoIterator<Item = &'c crate::UCred, IntoIter: ExactSizeIterator>,
@@ -180,18 +183,6 @@ impl<'a> AncillaryMessageWriter<'a> {
 		// SAFETY: the cmsg data is valid and fully initialized.
 		unsafe { cmsg.commit() };
 		Ok(())
-	}
-
-	/// Add Unix credentials to the ancillary data.
-	///
-	/// The function returns `Ok(())` if there is enough space in the buffer.
-	/// If there is not enough space, then no credentials are appended.
-	///
-	/// This function adds a single control message with level `SOL_SOCKET` and type `SCM_CREDENTIALS` on most platforms.
-	/// On NetBSD the message has type `SCM_CREDS`.
-	#[cfg(all(doc, not(any(target_os = "android", target_os = "linux", target_os = "netbsd"))))]
-	pub fn add_ucreds(&mut self, credentials: &[crate::UCred]) -> Result<(), AddControlMessageError> {
-		panic!("fake function for doc generation")
 	}
 }
 
