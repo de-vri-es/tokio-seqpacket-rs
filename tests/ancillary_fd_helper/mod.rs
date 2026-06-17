@@ -21,7 +21,7 @@ pub async fn receive_file_descriptor_socket(file_payload: &[u8], socket_payload:
 
 	// Send the message with file descriptor.
 	assert!(let Ok(n_written) = socket_a.send_vectored_with_ancillary(&[IoSlice::new(socket_payload)], &mut cmsg).await);
-	assert_eq!(n_written, socket_payload.len());
+	assert!(n_written == socket_payload.len());
 
 	// Return the receiving socket from the scope.
 	socket_b
@@ -34,7 +34,7 @@ pub async fn receive_file_descriptor(ancillary_buf: &mut [u8]) -> AncillaryMessa
 
 	let mut read_buf = [0u8; 64];
 	assert!(let Ok((msg_info, cmsg)) = socket.recv_vectored_with_ancillary(&mut [IoSliceMut::new(&mut read_buf)], ancillary_buf).await);
-	assert_eq!(msg_info.bytes_read(), 29);
+	assert!(msg_info.bytes_read() == 29);
 	assert!(&read_buf[..29] == b"Here, have a file descriptor.");
 
 	cmsg

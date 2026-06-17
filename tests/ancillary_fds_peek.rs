@@ -38,12 +38,12 @@ async fn peek_fd() {
 	// We should be able to peek at the message (and thus get FDs) twice.
 	for _ in 0..2 {
 		assert!(let Ok((msg_info, cmsg)) = socket.peek_vectored_with_ancillary(&mut [IoSliceMut::new(&mut read_buf)], &mut ancillary_buf).await);
-		assert_eq!(msg_info.bytes_read(), 12);
+		assert!(msg_info.bytes_read() == 12);
 		assert_cmsg(cmsg)
 	}
 
 	// We should be able to receive the message after peeking at it.
 	assert!(let Ok((msg_info, cmsg)) = socket.recv_vectored_with_ancillary(&mut [IoSliceMut::new(&mut read_buf)], &mut ancillary_buf).await);
-	assert_eq!(msg_info.bytes_read(), 12);
+	assert!(msg_info.bytes_read() == 12);
 	assert_cmsg(cmsg)
 }
