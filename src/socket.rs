@@ -25,25 +25,26 @@ impl MessageInfo {
 		self.bytes_read
 	}
 
-	/// Whether the message was truncated due to insufficient buffer space.
+	/// Check if the message was truncated due to insufficient buffer space.
 	///
-	/// The truncated bytes of a received message are lost forever. As such, you should ensure
-	/// that your buffer is large enough for the expected messages, or [peek] at the message
-	/// first to dynamically resize the receive buffer if necessary.
+	/// The truncated bytes of a received message are lost forever.
+	/// As such, you should ensure that your buffer is large enough for the expected messages,
+	/// or [peek] at the message first to dynamically resize the receive buffer if necessary.
+	/// But keep in mind that peeking at a message may consume the ancillary data, making it impossible to retrieve later.
 	///
 	/// [peek]: UnixSeqpacket::peek
 	pub fn truncated(&self) -> bool {
 		self.truncated
 	}
 
-	/// Whether the message's ancillary data was truncated due to insufficient buffer space.
+	/// Check if the ancillary data was truncated due to insufficient buffer space.
 	///
-	/// The truncated ancillary data of a received message is lost forever. As such, you should
-	/// ensure that your ancillary buffer is large enough for the expected messages, or, if
-	/// writing code for platforms that support this (like Linux and Android), [peek] at
-	/// the message first to dynamically resize the ancillary buffer if necessary.
+	/// The truncated ancillary data of a received message is lost forever.
+	/// As such, you should ensure that your ancillary buffer is large enough for the expected messages.
+	/// Alternatively, if your platform supports it (like Linux and Android),
+	/// you can [peek] at the message first to dynamically resize the ancillary buffer as necessary.
 	///
-	/// [peek]: UnixSeqpacket::peek_vectored_with_ancillary
+	/// [peek]: UnixSeqpacket::peek_with_ancillary
 	pub fn ancillary_truncated(&self) -> bool {
 		self.ancillary_truncated
 	}
@@ -57,14 +58,14 @@ impl MessageInfo {
 ///
 /// ## `peek` Methods and Ancillary Data
 ///
-/// This type exposes methods to peek at the next message to be received. However, the POSIX
-/// standard does not specify how peeking at a seqpacket/datagram affects its ancillary data.
+/// This type exposes methods to peek at the next message to be received.
+/// However, the POSIX standard does not specify how peeking at a seqpacket/datagram affects its ancillary data.
 ///
-/// On Linux and Android, ancillary file descriptors are cloned when peeking, so they are
-/// not lost to subsequent `peek` or `recv` calls. This makes it possible to expose
-/// [`poll_peek_vectored_with_ancillary`] and [`peek_vectored_with_ancillary`] methods that
-/// have the same ancillary ownership semantics as their `recv` variants. These methods
-/// are gated behind the `non-portable` feature.
+/// On Linux and Android, ancillary file descriptors are cloned when peeking,
+/// so they are not lost to subsequent `peek` or `recv` calls.
+/// This makes it possible to expose [`poll_peek_vectored_with_ancillary`] and [`peek_vectored_with_ancillary`] methods
+/// that have the same ancillary ownership semantics as their `recv` variants.
+/// These methods are gated behind the `non-portable` feature.
 ///
 /// Other operating systems may behave differently, such as:
 /// - Returning file descriptors from the next message without cloning them (FreeBSD);
@@ -170,9 +171,8 @@ impl UnixSeqpacket {
 
 	/// Get the async file descriptor of this object.
 	///
-	/// This can be useful for applications that want to do low-level socket calls, such as
-	/// [`sendmsg`](libc::sendmsg), but still want to use async and need to know when the socket is
-	/// ready to be used.
+	/// This can be useful for applications that want to do low-level socket calls, such as [`sendmsg`](libc::sendmsg),
+	/// but still want to use async and need to know when the socket is ready to be used.
 	///
 	/// Example:
 	/// ```
@@ -187,8 +187,7 @@ impl UnixSeqpacket {
 
 	/// Get the effective credentials of the process which called `connect` or `pair`.
 	///
-	/// Note that this is not necessarily the process that currently has the file descriptor
-	/// of the other side of the connection.
+	/// Note that this is not necessarily the process that currently has the file descriptor of the other side of the connection.
 	pub fn peer_cred(&self) -> std::io::Result<UCred> {
 		UCred::from_socket_peer(&self.io)
 	}
@@ -332,8 +331,8 @@ impl UnixSeqpacket {
 
 	/// Try to peek at the next message on the socket from the connected peer without blocking.
 	///
-	/// Peeking a message with ancillary data may consume or omit it on some platforms. See the
-	/// [type level documentation](UnixSeqpacket) for more information.
+	/// Peeking a message with ancillary data may consume or omit it on some platforms.
+	/// See the [`UnixSeqpacket`] documentation for more information.
 	///
 	/// If there is no data ready yet, the current task is scheduled to wake up when the socket becomes readable.
 	///
@@ -360,8 +359,8 @@ impl UnixSeqpacket {
 
 	/// Try to peek at the next message on the socket from the connected peer without blocking.
 	///
-	/// Peeking a message with ancillary data may consume or omit it on some platforms. See the
-	/// [type level documentation](UnixSeqpacket) for more information.
+	/// Peeking a message with ancillary data may consume or omit it on some platforms.
+	/// See the [`UnixSeqpacket`] documentation for more information.
 	///
 	/// If there is no data ready yet, the current task is scheduled to wake up when the socket becomes readable.
 	///
@@ -429,8 +428,9 @@ impl UnixSeqpacket {
 	/// Note that you should always wrap or close any file descriptors received this way.
 	/// If you do not, the received file descriptors will stay open until the process is terminated.
 	///
-	/// Peeking a message with ancillary data may consume or omit it on some platforms. See the
-	/// [type level documentation](UnixSeqpacket) for more information.
+	/// Any objects in the ancillary data are duplicated.
+	/// They will be received again in subsequent calls to any peek or recv function.
+	/// Do note that the objects are *duplicated*, so file descriptors refer to the same kernel object, but they may have a different number.
 	///
 	/// If there is no data ready yet, the current task is scheduled to wake up when the socket becomes readable.
 	///
@@ -455,8 +455,9 @@ impl UnixSeqpacket {
 	/// Note that you should always wrap or close any file descriptors received this way.
 	/// If you do not, the received file descriptors will stay open until the process is terminated.
 	///
-	/// Peeking a message with ancillary data may consume or omit it on some platforms. See the
-	/// [type level documentation](UnixSeqpacket) for more information.
+	/// Any objects in the ancillary data are duplicated.
+	/// They will be received again in subsequent calls to any peek or recv function.
+	/// Do note that the objects are *duplicated*, so file descriptors refer to the same kernel object, but they may have a different number.
 	///
 	/// If there is no data ready yet, the current task is scheduled to wake up when the socket becomes readable.
 	///
@@ -508,8 +509,8 @@ impl UnixSeqpacket {
 
 	/// Peek at the next message on the socket from the connected peer.
 	///
-	/// Peeking a message with ancillary data may consume or omit it on some platforms. See the
-	/// [type level documentation](UnixSeqpacket) for more information.
+	/// Peeking a message with ancillary data may consume or omit it on some platforms.
+	/// See the [`UnixSeqpacket`] documentation for more information.
 	///
 	/// This function is safe to call concurrently from different tasks.
 	/// All calling tasks will try to complete the asynchronous action,
@@ -530,8 +531,8 @@ impl UnixSeqpacket {
 
 	/// Peek at the next message on the socket from the connected peer.
 	///
-	/// Peeking a message with ancillary data may consume or omit it on some platforms. See the
-	/// [type level documentation](UnixSeqpacket) for more information.
+	/// Peeking a message with ancillary data may consume or omit it on some platforms.
+	/// See the [`UnixSeqpacket`] documentation for more information.
 	///
 	/// This function is safe to call concurrently from different tasks.
 	/// All calling tasks will try to complete the asynchronous action,
@@ -594,8 +595,9 @@ impl UnixSeqpacket {
 	/// Note that you should always wrap or close any file descriptors received this way.
 	/// If you do not, the received file descriptors will stay open until the process is terminated.
 	///
-	/// Peeking a message with ancillary data may consume or omit it on some platforms. See the
-	/// [type level documentation](UnixSeqpacket) for more information.
+	/// Any objects in the ancillary data are duplicated.
+	/// They will be received again in subsequent calls to any peek or recv function.
+	/// Do note that the objects are *duplicated*, so file descriptors refer to the same kernel object, but they may have a different number.
 	///
 	/// This function is safe to call concurrently from different tasks.
 	/// All calling tasks will try to complete the asynchronous action,
@@ -619,8 +621,9 @@ impl UnixSeqpacket {
 	/// Note that you should always wrap or close any file descriptors received this way.
 	/// If you do not, the received file descriptors will stay open until the process is terminated.
 	///
-	/// Peeking a message with ancillary data may consume or omit it on some platforms. See the
-	/// [type level documentation](UnixSeqpacket) for more information.
+	/// Any objects in the ancillary data are duplicated.
+	/// They will be received again in subsequent calls to any peek or recv function.
+	/// Do note that the objects are *duplicated*, so file descriptors refer to the same kernel object, but they may have a different number.
 	///
 	/// This function is safe to call concurrently from different tasks.
 	/// All calling tasks will try to complete the asynchronous action,
