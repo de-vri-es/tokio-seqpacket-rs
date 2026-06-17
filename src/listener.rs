@@ -60,7 +60,7 @@ impl UnixSeqpacketListener {
 	/// The `backlog` parameter is used to determine the size of connection queue.
 	/// See `man 3 listen` for more information.
 	pub fn bind_with_backlog<P: AsRef<Path>>(address: P, backlog: c_int) -> std::io::Result<Self> {
-		let socket = sys::local_seqpacket_socket()?;
+		let socket = sys::local_seqpacket_socket_non_blocking()?;
 		sys::bind(&socket, address)?;
 		sys::listen(&socket, backlog)?;
 		Self::new(socket)

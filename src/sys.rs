@@ -16,9 +16,16 @@ const RECV_MSG_DEFAULT_FLAGS: c_int = libc::MSG_NOSIGNAL;
 #[cfg(not(any(target_os = "illumos", target_os = "solaris")))]
 const RECV_MSG_DEFAULT_FLAGS: c_int = libc::MSG_NOSIGNAL | libc::MSG_CMSG_CLOEXEC;
 
-pub fn local_seqpacket_socket() -> std::io::Result<FileDesc> {
+pub fn local_seqpacket_socket_non_blocking() -> std::io::Result<FileDesc> {
 	unsafe {
 		let fd = check(libc::socket(libc::AF_UNIX, SOCKET_TYPE, 0))?;
+		Ok(FileDesc::from_raw_fd(fd))
+	}
+}
+
+pub fn local_seqpacket_socket_blocking() -> std::io::Result<FileDesc> {
+	unsafe {
+		let fd = check(libc::socket(libc::AF_UNIX, SOCKET_TYPE & !libc::SOCK_NONBLOCK, 0))?;
 		Ok(FileDesc::from_raw_fd(fd))
 	}
 }
@@ -29,6 +36,23 @@ pub fn local_seqpacket_pair() -> std::io::Result<(FileDesc, FileDesc)> {
 		check(libc::socketpair(libc::AF_UNIX, SOCKET_TYPE, 0, fds.as_mut_ptr()))?;
 		Ok((FileDesc::from_raw_fd(fds[0]), FileDesc::from_raw_fd(fds[1])))
 	}
+}
+
+/// Set the underlying object of a file descriptor in blocking or non-blocking mode.
+///
+/// SAFETY: This is not an atomic operation.
+/// You must ensure that no other thread is modiying open file flags at the same time, or modifications from one thread may be lost.
+/// Since file descriptors can be duplicated, even taking `&mut FileDesc` is not enough to prevent this race conditions.
+pub unsafe fn set_non_blocking(fd: &mut FileDesc, non_blocking: bool) -> std::io::Result<()> {
+	unsafe {
+		let old_flags = check(libc::fcntl(fd.as_raw_fd(), libc::F_GETFL))?;
+		let new_flags = match non_blocking {
+			true => old_flags | libc::O_NONBLOCK,
+			false => old_flags & !libc::O_NONBLOCK,
+		};
+		check(libc::fcntl(fd.as_raw_fd(), libc::F_SETFL, new_flags))?;
+	}
+	Ok(())
 }
 
 pub fn connect<P: AsRef<Path>>(socket: &FileDesc, address: P) -> std::io::Result<()> {

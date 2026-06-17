@@ -1,6 +1,7 @@
 main:
   * Allow passing in file descriptors and ucreds through a fixed size iterator.
   * Allow peeking at the next incoming message (will loose ancillary data on some platforms).
+  * Add `UnixSeqpacket::connect_blocking(...)` function.
 
 v0.8.2 - 2026-05-14:
   * Make full capacity available for Linux abstract socket paths (was short one byte).
