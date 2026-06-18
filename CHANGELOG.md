@@ -1,4 +1,4 @@
-main:
+v0.9.0 - 2026-06-18:
   * Allow passing in file descriptors and ucreds through a fixed size iterator.
   * Allow peeking at the next incoming message (will loose ancillary data on some platforms).
   * Add `UnixSeqpacket::connect_blocking(...)` function.
