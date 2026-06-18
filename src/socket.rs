@@ -116,7 +116,7 @@ impl UnixSeqpacket {
 
 	/// Connect a new seqpacket socket to the given address.
 	pub async fn connect<P: AsRef<Path>>(address: P) -> std::io::Result<Self> {
-		let socket = sys::local_seqpacket_socket()?;
+		let socket = sys::local_seqpacket_socket_non_blocking()?;
 		if let Err(e) = sys::connect(&socket, address) {
 			if e.kind() != std::io::ErrorKind::WouldBlock {
 				return Err(e);
@@ -126,6 +126,29 @@ impl UnixSeqpacket {
 		let socket = Self::new(socket)?;
 		socket.io.writable().await?.retain_ready();
 		Ok(socket)
+	}
+
+	/// Connect a new seqpacket socket to the given address, blocking until the connection is established.
+	///
+	/// Note that the socket has to be registered with the tokio [`Runtime`].
+	/// This means that the function can not be used outside of a tokio runtime, event though it is blocking.
+	///
+	/// [`Runtime`]: https://docs.rs/tokio/1/tokio/runtime/struct.Runtime.html
+	pub fn connect_blocking<P: AsRef<Path>>(address: P) -> std::io::Result<Self> {
+		let mut socket = sys::local_seqpacket_socket_blocking()?;
+		if let Err(e) = sys::connect(&socket, address) {
+			if e.kind() != std::io::ErrorKind::WouldBlock {
+				return Err(e);
+			}
+		}
+
+		// SAFETY: We just created the socket in this scope,
+		// no other thread can soundly be be modifying its flags right now.
+		unsafe {
+			sys::set_non_blocking(&mut socket, true)?;
+		}
+
+		Self::new(socket)
 	}
 
 	/// Create a pair of connected seqpacket sockets.
