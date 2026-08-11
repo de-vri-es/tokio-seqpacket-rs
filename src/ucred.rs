@@ -1,4 +1,5 @@
-use libc::{gid_t, pid_t, uid_t};
+pub use libc::{gid_t, pid_t, uid_t};
+
 use std::os::unix::io::AsRawFd;
 
 /// Credentials of a process
@@ -13,22 +14,58 @@ pub struct UCred {
 }
 
 impl UCred {
+	/// Create a new UCred struct with the given values.
+	///
+	/// Note that if you try to send one as ancillary data,
+	/// the UID, GID and PID must normally match the UID, GID and PID
+	/// of the current process.
+	///
+	/// Privileged processes may be allowed to send crendentials containing different values.
+	/// Refer to your OS documentation for details.
+	///
+	/// Setting the PID to 0 will make [`pid()`](Self::pid) return `None`.
+	pub fn new(uid: uid_t, gid: gid_t, pid: pid_t) -> Self {
+		Self { uid, gid, pid }
+	}
+
+	/// Get the credentials of the current process.
+	pub fn from_current_process() -> Self {
+		// SAFETY: getuid() is purely informational and has no side effects.
+		let uid = unsafe { libc::getuid() };
+		// SAFETY: getgid() is purely informational and has no side effects.
+		let gid = unsafe { libc::getgid() };
+		// SAFETY: getpid() is purely informational and has no side effects.
+		let pid = unsafe { libc::getpid() };
+
+		Self::new(uid, gid, pid)
+	}
+
 	/// Get the credentials of a connected peer for a Unix socket.
 	pub fn from_socket_peer<T: AsRawFd>(socket: &T) -> std::io::Result<Self> {
 		get_peer_cred(socket)
 	}
 
-	/// Gets UID (user ID) of the process.
+	/// Get the UID (user ID) of the credentials struct.
 	pub fn uid(&self) -> uid_t {
 		self.uid
 	}
 
-	/// Gets GID (group ID) of the process.
+	/// Set the UID (user ID) of the credentials struct.
+	pub fn set_uid(&mut self, uid: uid_t) {
+		self.uid = uid
+	}
+
+	/// Get the GID (group ID) of the credentials.
 	pub fn gid(&self) -> gid_t {
 		self.gid
 	}
 
-	/// Gets PID (process ID) of the process.
+	/// Set the GID (group ID) of the credentials struct.
+	pub fn set_gid(&mut self, gid: gid_t) {
+		self.gid = gid
+	}
+
+	/// Get the PID (process ID) of the credentials.
 	///
 	/// This is only implemented under Linux, Android, iOS, macOS, Solaris and
 	/// Illumos. On other plaforms this will always return `None`.
@@ -38,6 +75,13 @@ impl UCred {
 		} else {
 			Some(self.pid)
 		}
+	}
+
+	/// Set the PID (process ID) of the credentials struct.
+	///
+	/// Setting the PID to 0 will make [`pid()`](Self::pid) return `None`.
+	pub fn set_pid(&mut self, pid: pid_t) {
+		self.pid = pid
 	}
 }
 
