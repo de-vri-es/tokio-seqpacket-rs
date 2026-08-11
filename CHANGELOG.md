@@ -1,4 +1,4 @@
-main:
+v0.9.1 - 2026-08-11:
   * Allow modifying and constructing `UCred` values for use as ancillary data.
   * Add `UCred::from_current_process()` to get the credentials of the current process.
 
