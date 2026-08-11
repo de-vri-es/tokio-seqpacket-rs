@@ -1,3 +1,7 @@
+main:
+  * Allow modifying and constructing `UCred` values for use as ancillary data.
+  * Add `UCred::from_current_process()` to get the credentials of the current process.
+
 v0.9.0 - 2026-06-18:
   * Allow passing in file descriptors and ucreds through a fixed size iterator.
   * Allow peeking at the next incoming message (will loose ancillary data on some platforms).

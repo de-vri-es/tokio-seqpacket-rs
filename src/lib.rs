@@ -68,7 +68,7 @@ mod ucred;
 
 pub use listener::UnixSeqpacketListener;
 pub use socket::{MessageInfo, UnixSeqpacket};
-pub use ucred::UCred;
+pub use ucred::{gid_t, pid_t, uid_t, UCred};
 
 #[doc(hidden)]
 #[deprecated(
