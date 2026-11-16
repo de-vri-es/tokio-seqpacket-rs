@@ -118,13 +118,16 @@ impl UnixSeqpacket {
 	pub async fn connect<P: AsRef<Path>>(address: P) -> std::io::Result<Self> {
 		let socket = sys::local_seqpacket_socket_non_blocking()?;
 		if let Err(e) = sys::connect(&socket, address) {
-			if e.kind() != std::io::ErrorKind::WouldBlock {
+			if e.raw_os_error() != Some(libc::EINPROGRESS) {
 				return Err(e);
 			}
 		}
 
 		let socket = Self::new(socket)?;
 		socket.io.writable().await?.retain_ready();
+		if let Some(e) = socket.take_error()? {
+			return Err(e);
+		}
 		Ok(socket)
 	}
 
@@ -136,11 +139,7 @@ impl UnixSeqpacket {
 	/// [`Runtime`]: https://docs.rs/tokio/1/tokio/runtime/struct.Runtime.html
 	pub fn connect_blocking<P: AsRef<Path>>(address: P) -> std::io::Result<Self> {
 		let mut socket = sys::local_seqpacket_socket_blocking()?;
-		if let Err(e) = sys::connect(&socket, address) {
-			if e.kind() != std::io::ErrorKind::WouldBlock {
-				return Err(e);
-			}
-		}
+		sys::connect(&socket, address)?;
 
 		// SAFETY: We just created the socket in this scope,
 		// no other thread can soundly be be modifying its flags right now.
